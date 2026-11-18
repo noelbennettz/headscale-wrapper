@@ -34,8 +34,9 @@ mapping to the native `headscale` CLI and the parsing assumptions.
 - **Subnet routes that keep the approved list**: `hs route add` reads the
   existing routes and sends the merged list, because headscale's
   `approve-routes` replaces it; `hs route rm` with no CIDR withdraws all
-- **Preauthkeys in one line**: `hs key new` prints the key and nothing else, so
-  `KEY=$(hs key new -u alice -e 24h)` is the whole enrolment step
+- **Preauthkeys in one line**: `hs key new` writes no text of its own — headscale
+  prints the key alone — so `KEY=$(hs key new -u alice -e 24h)` captures exactly
+  the key
 - **Errors keep headscale's reason**: the `rpc error: ... desc = ` noise is
   dropped, so `hs ls rm` says `user not found` and not just `failed`
 - **Safe by default**: `hs rm` and `hs user rm` ask first and refuse to run in a
@@ -75,8 +76,10 @@ HS_HEADSCALE_BIN=/usr/local/bin/headscale ./hs ls
 ```
 
 The installer warns when `jq` or `headscale` is missing, but does not fail on
-it. To update, pull and install again — `install.sh` overwrites the script in
-place, so there is no state to migrate and nothing else on the machine changes:
+it. It only runs `install -m 0755` on the one destination path: it creates no
+directory, inspects nothing that is already there and replaces it. To update,
+pull and install again — `install.sh` overwrites the script in place, so there is
+no state to migrate and nothing else on the machine changes:
 
 ```sh
 git pull
@@ -93,11 +96,13 @@ Uninstall:
 ./uninstall.sh /usr/bin/hs   # if you installed it somewhere else
 ```
 
-It refuses to touch a file that does not look like `hs` (use `--force` to
-override), and only deletes the script itself: headscale, jq and anything you
-exported yourself (`HS_DEFAULT_USER` etc.) are untouched. Running it twice is
-fine — the second run reports nothing to do — and it warns when another `hs`
-earlier in `PATH` would still shadow the removed one.
+It refuses to delete a file that does not carry the `hs` header line (the
+`name-based wrapper around the headscale` comment near the top); `--force` or
+`-f` deletes such a file anyway, with a warning on stderr. It removes that one
+file and nothing else: headscale, jq and the variables you exported yourself
+(`HS_DEFAULT_USER` etc.) are untouched. Running it twice is fine — the second run
+prints `not installed (nothing to do)` and exits 0 — and after a successful
+removal it notes any other `hs` still on `PATH`.
 
 Tested on Debian/Ubuntu with bash 5.x against headscale v0.29; nothing in the
 script is Linux-specific beyond the usual coreutils.
@@ -125,23 +130,25 @@ script is Linux-specific beyond the usual coreutils.
 
 `hs expire` also accepts `-d`/`--disable`, and `-e` as an alias of `--at`;
 `hs key new` accepts the long forms `--user`, `--expiration`, `--reusable`,
-`--ephemeral` and `--tag`. The node, key, route and user groups accept the
-usual verb aliases (`rm`/`del`/`delete`, `ls`/`list`, `expire`/`revoke`, ...).
-`hs help` runs before the dependency check and works without `jq` or
+`--ephemeral` and `--tag`, and sends one `--tags` flag per `-t`. `-f` is the
+short form of `--force`. The node, key, route and user groups accept the usual
+verb aliases (`rm`/`del`/`delete`, `ls`/`list`, `expire`/`revoke`, ...), and the
+top-level command names have aliases of their own (`nodes`, `info`, `mv`,
+`tags`, `logout`, `keys`/`preauthkey`/`authkey`, `users`). `hs help`, `hs -h`
+and `hs --help` run before the dependency check and work without `jq` or
 `headscale`.
 
 ### `hs node <verb>` — headscale-style spelling
 
-Node commands also accept the two-word form you may be used to from the native
-CLI: `hs node ls`, `hs node show`, `hs node rm`, `hs node rename`, `hs node
-tag`, `hs node expire`, `hs node route` are exactly `hs ls`, `hs show`,
-`hs rm`, ... An unknown verb is an error rather than a user filter:
+Node commands also accept the two-word spelling the native CLI uses: `hs node
+ls`, `hs node show`, `hs node rm`, `hs node rename`, `hs node tag`, `hs node
+expire` and `hs node route` run `hs ls`, `hs show`, `hs rm`, and so on; bare
+`hs node` lists nodes. An unknown verb is an error rather than a user filter:
 
 ```
 $ hs node frobnicate gw
 hs: unknown node subcommand: frobnicate (available: ls, show, rm, rename, tag, expire, route; to filter by user use: hs ls <user>)
 ```
-
 
 ## Naming nodes
 
@@ -167,17 +174,19 @@ hs: failed to list nodes (user: rm): user not found (hs user ls lists the users)
 
 ## Dates, durations and numbers
 
-`hs` forwards these values to headscale instead of re-implementing them, so the
-formats and limits below are exactly what headscale v0.29 accepts. Anything else
-comes back from the server as `parsing expiry time: ...` or
-`parsing duration: ...`.
+`hs` passes these values to headscale instead of re-implementing the calendar
+rules, so the formats and limits below are those of headscale v0.29. The one
+value `hs` inspects itself is `--at`, where it checks the RFC3339 shape before
+spawning anything. A value headscale rejects comes back as `parsing expiry
+time: ...` or `parsing duration: ...` on stderr, with the exit status of the
+`headscale` process.
 
 ### Expiry timestamps — `hs expire --at`
 
 `--at` is a **point in time in RFC3339 form**: full date, time and a timezone
 (`Z` or `±hh:mm`). It is not a duration and not a Unix timestamp. `hs` checks
-that shape before calling headscale, so typos fail fast with an `hs:` hint
-instead of a server-side parse error.
+that shape with a regular expression before calling headscale, so typos fail
+fast with an `hs:` hint instead of a parse error from headscale:
 
 | Input | Accepted | Why |
 | --- | --- | --- |
@@ -189,6 +198,10 @@ instead of a server-side parse error.
 | `2026-02-01 00:00:00Z` | no | space instead of `T` |
 | `1767225600` | no | epoch seconds; use the expanded date/time |
 | `24h`, `7d` | no | `--at` is a timestamp, not a duration |
+
+A rejected value prints `hs: --at takes an RFC3339 timestamp with a timezone,
+e.g. 2026-02-01T00:00:00Z or 2026-02-01T08:00:00+08:00 (got: <value>)`; an empty
+one prints `hs: --at needs a timestamp, ...`. Neither reaches headscale.
 
 What the timestamp means:
 
@@ -203,7 +216,9 @@ What the timestamp means:
   `--at` is not sent, though its shape is still checked so a typo does not go
   unnoticed.
 
-Times are printed back in **UTC**, so a `+08:00` expiry comes back shifted.
+`hs ls` and `hs show` print timestamps in **UTC** (jq's `todate`), so a `+08:00`
+expiry comes back shifted to the same instant in UTC. `hs expire` echoes the
+`--at` value it was given, unchanged, in its confirmation line.
 
 Note the letter clash: `-e` means *timestamp* in `hs expire` but *duration* in
 `hs key new`. Same letter, different grammar:
@@ -216,7 +231,7 @@ hs key new -u alice -e 24h                 # 24 hours from now
 ### Preauthkey lifetime — `hs key new -e`
 
 `-e` is a **duration counted from now**, parsed by headscale with Prometheus'
-duration parser. Rules:
+`model.ParseDuration`. Rules:
 
 - units: `y` (365 d), `w` (7 d), `d` (24 h), `h`, `m`, `s`, `ms` — nothing else
   (`us`, `ns`, `M` for month are rejected);
@@ -245,20 +260,22 @@ count from **1**; `0` is treated as "unset" and can never be a valid ID.
 `hs key rm` and `hs key expire` take plain decimal numbers only — anything else
 fails with `key ID must be numeric: <value>`, and `0` is refused locally with
 `... must be 1 or greater: 0` rather than being sent to headscale. `hs rm`,
-`hs show`, `hs rename`, `hs tag` and `hs expire` take an ID *or* a name;
-`hs user rm` treats an all-digit argument as an ID and everything else as a
-name.
+`hs show`, `hs rename`, `hs tag` and `hs expire` take an ID *or* a name, and so
+do `hs route`, `hs route add` and `hs route rm`; `hs user rm` treats an all-digit
+argument as an ID and everything else as a name. In a node or user query an exact
+ID wins over a name, so a node whose `given_name` is a number is reachable only
+through a non-numeric spelling of its hostname.
 
 ## Tags
 
-Tags come from headscale's ACL vocabulary and are validated server-side: each
-one must start with `tag:` (so `tag:mobile`, not `mobile`), must be lowercase
-and must not contain spaces. `hs tag <node> <tag...>` replaces the whole list,
-so a node ends up with exactly the tags you name.
+Tags come from headscale's ACL vocabulary and are checked by headscale, not by
+`hs`: each one must start with `tag:` (so `tag:mobile`, not `mobile`), be
+lowercase and contain no spaces. `hs tag <node> <tag...>` sends the whole list in
+one `nodes tag` call, which replaces the node's tags, so a node ends up with
+exactly the tags you name.
 
-A node cannot be left with zero tags in v0.29 — headscale rejects an empty tag
-list — so `hs tag <node>` with no tags fails immediately instead of sending a
-request that cannot succeed:
+`hs tag <node>` with no tag argument fails before any request is sent, because
+headscale v0.29 has no way to clear a node's tags:
 
 ```
 $ hs tag phone
@@ -296,44 +313,58 @@ $ hs key ls
 ID  KEY              REUSABLE  EPHEMERAL  USED  EXPIRY                OWNER
 1   pk-aaaaaaaaaaaa  yes       no         no    2026-01-02T00:00:00Z  tag:mobile
 2   pk-bbbbbbbbbbbb  no        yes        yes   2026-01-01T20:40:00Z  bob
+
+$ hs user ls
+ID  NAME   DISPLAY  EMAIL              CREATED
+1   alice  Alice    alice@example.com  2025-12-29T09:20:00Z
+2   bob    -        -                  2025-12-30T13:06:40Z
 ```
 
 (The rows above come from `test/fixtures`, i.e. synthetic data.)
+
+Column conventions: `NAME` is the node's `given_name`, falling back to its
+hostname (in `hs show`, `name` is that same value and `hostname` is headscale's
+`name`); `ADDRESS`, `TAGS`, `APPROVED` and the other route columns join multiple
+values with a comma and show `-` when the list is empty; `EXPIRY` is `-` when the
+node has no expiry; `OWNER` in `hs key ls` shows the key's ACL tags when it has
+any and the user name otherwise; `DISPLAY`, `EMAIL` and `CREATED` fall back to
+`-` for fields headscale leaves empty.
 
 ## Exit codes
 
 | Code | Meaning |
 | --- | --- |
-| 0 | Success, or the user cancelled a confirmation prompt |
-| 1 | Anything else: missing jq/headscale, unknown node, ambiguous name, headscale itself failing, refusal in a non-interactive shell |
+| 0 | Success, or the user declined a confirmation prompt (`hs` prints `cancelled` and returns 0) |
+| 1 | Every error `hs` detects itself: missing jq or headscale, unknown command or node, ambiguous name, a failed `nodes list`/`users list`/`preauthkeys list`, a bad flag, a rejected ID, or the refusal to prompt in a non-interactive shell |
+| *n* | Whatever the `headscale` or `jq` process returned, when it fails a command whose status `hs` does not check itself — e.g. `hs version`, `hs rm --force`, `hs key rm` |
 
 ## Environment variables
 
-The first two are read at runtime by `hs` itself; the third only affects the installer.
+The first two are read at runtime by `hs` itself; the third only affects the
+installer and uninstaller.
 
 | Variable | Default | Description |
 |---|---|---|
-| `HS_HEADSCALE_BIN` | `headscale` | Path to the headscale binary to call. Set it to run `hs` against a non-default install, e.g. `HS_HEADSCALE_BIN=/usr/local/bin/headscale ./hs ls` |
-| `HS_DEFAULT_USER` | *unset* | Used when `-u` is omitted and only one user exists; set it to pin a user for `hs key new` |
-| `HS_SKIP_ROOT_CHECK` | `0` | Set to `1` to let `install.sh` / `uninstall.sh` run without root. `test/smoke.sh` sets it for itself; normal use should never need it |
+| `HS_HEADSCALE_BIN` | `headscale` | The headscale binary `hs` calls. A bare name is looked up in `PATH`, a path is used as given; `hs` also uses it for the up-front existence check. Set it to run `hs` against a non-default install, e.g. `HS_HEADSCALE_BIN=/usr/local/bin/headscale ./hs ls` |
+| `HS_DEFAULT_USER` | *unset* | Fallback for `hs key new` when `-u` is omitted. With neither set, `hs` uses the only user when headscale has exactly one and otherwise fails with `a user is required: hs key new -u <name>` |
+| `HS_SKIP_ROOT_CHECK` | `0` | Set to `1` to let `install.sh` / `uninstall.sh` run as a non-root user. Any other value leaves the root check in place. `test/smoke.sh` sets it for itself; normal use should never need it |
 
 ## FAQ
 
 ### How is this different from a headscale web UI?
 
 `headscale-ui` and `headplane` are web front ends for headscale: TLS, an auth
-layer, a session, and a UI that has to keep up with headscale's API. `hs` is
-the other side of that trade-off: a single bash script on the server, run as
-root over SSH, with the same name-based commands and no credentials of its own.
-If you want a panel for other people, use a web UI; if you are the only
-operator and you live in a terminal, this is shorter.
+layer, a session, and a UI that tracks headscale's API. `hs` is the other side of
+that trade-off: one bash script on the server, usually run as root over SSH, with
+the same name-based commands and no credentials of its own. A web UI serves
+several operators; `hs` covers the single operator working in a terminal.
 
 ### Why not just use the headscale CLI directly?
 
-Because every node command wants `--identifier <id>` — copy the ID from one
-command into the next, and one wrong ID acts on the wrong node. `hs` resolves
-names itself, so `hs expire phone` is the whole command, and the output is a
-table rather than a JSON dump you have to read by eye.
+Every node command in the native CLI takes `--identifier <id>`: the ID has to be
+copied from one command into the next, and one wrong ID acts on the wrong node.
+`hs` resolves names itself, so `hs expire phone` is the whole command, and the
+output is a table rather than a JSON dump to read by eye.
 
 ### What happens if a name matches more than one node?
 
@@ -353,17 +384,21 @@ prefix — a name that merely *contains* the query never matches.
 Yes for reads and for `--force` writes. Destructive commands (`hs rm`,
 `hs user rm`) refuse to run when stdin is not a terminal, so a pipeline or a
 cron job cannot delete a node by accident; pass `--force` when that is exactly
-what you mean. Read commands are safe to pipe — the exit code is 1 on any
-failure and the columns have no trailing whitespace.
+what you mean: `--force` is forwarded to headscale as well, where it is a root
+flag that skips the CLI's own confirmation. A `no` at the prompt cancels the
+remaining targets too: `hs rm a b` asks about each node in turn and stops at the
+first refusal, printing `cancelled` and exiting 0. Read commands are safe to
+pipe — `hs`'s own errors exit 1 and the columns carry no trailing whitespace.
 
 ### Does it work on IPv4-only or IPv6-only hosts?
 
 Yes. `hs` is a local wrapper: it execs the `headscale` binary on the same machine
-(which talks to the server over its local socket) and never opens a socket,
-listens on a port, or resolves a hostname itself. A host with only IPv4, only
-IPv6 or both therefore behaves identically — the test suite checks this by
-running the read commands with the network namespace unshared and by asserting
-that no `AF_INET`/`AF_INET6` socket is ever created.
+(which reaches the server over its local socket or the configured address) and
+never opens a socket, listens on a port, or resolves a hostname itself. A host
+with only IPv4, only IPv6 or both therefore behaves identically. The test suite
+checks this when the tools are installed: one `hs ls` runs under `strace
+-e trace=%network` and fails if an `AF_INET` socket shows up, and another runs
+inside `bwrap --unshare-net` with the network namespace unshared.
 
 Address families in the data are equally irrelevant: a node that registered with
 only an IPv4 address, only an IPv6 address, or both is listed with exactly what
@@ -399,7 +434,13 @@ It does not need a real headscale and does not touch anything:
 The install/uninstall cases write into a temporary directory and need
 `HS_SKIP_ROOT_CHECK=1`, which the test sets for itself; you should never need
 that variable in normal use. The IPv4/IPv6 cases also use `strace` and `bwrap`
-when they are installed, and skip those two checks when they are not.
+when they are installed, and skip those two checks when they are not (`bwrap`
+must also be able to unshare the network namespace).
+
+The fake `headscale` appends every invocation's arguments to `$HS_LOG` and reads
+its JSON from `$FIXTURES`, so the suite can assert on the exact argv `hs` builds
+and on how it renders a given response; `test/smoke.sh` points both at its own
+temporary directory.
 
 ## Mapping to the native CLI
 
@@ -407,6 +448,7 @@ when they are installed, and skip those two checks when they are not.
 | --- | --- |
 | `hs ls` | `headscale nodes list -o json` + jq |
 | `hs rm laptop --force` | `headscale nodes delete -i <id> --force` |
+| `hs rename phone pixel` | `headscale nodes rename -i <id> pixel` |
 | `hs tag phone tag:x` | `headscale nodes tag -i <id> -t tag:x` |
 | `hs expire phone` | `headscale nodes expire -i <id>` |
 | `hs expire phone --at T` | `headscale nodes expire -i <id> -e T` |
@@ -414,19 +456,23 @@ when they are installed, and skip those two checks when they are not.
 | `hs route add gw 10.0.0.0/8` | read `approved_routes`, then `nodes approve-routes -i <id> -r <merged>` |
 | `hs route rm gw` | `nodes approve-routes -i <id> -r ""` |
 | `hs key new -u alice -e 24h -r` | `preauthkeys create -u <user id> -e 24h --reusable` |
+| `hs key new -u alice -t tag:vpn` | `preauthkeys create -u <user id> -e 1h --tags tag:vpn` |
 | `hs key rm 3` | `preauthkeys delete -i 3` |
+| `hs key expire 3` | `preauthkeys expire -i 3` |
+| `hs user new carol` | `users create carol` |
 | `hs user rm bob --force` | `users destroy --name bob --force` |
+| `hs user rm 2 --force` | `users destroy --identifier 2 --force` |
 
 ## Implementation notes
 
-- Parsing assumptions: in v0.29, `--output json` is `encoding/json` marshalling
-  the protobuf structs directly, so keys are **snake_case** (`given_name`,
-  `approved_routes`, `ip_addresses`, ...), `id` is a number rather than a
-  string, and timestamps look like `{"seconds":...,"nanos":...}`. Re-check these
-  when bumping headscale by a major version.
+- Parsing assumptions: in v0.29, `--output json` serialises the response structs
+  with `encoding/json` without renaming, so keys are **snake_case**
+  (`given_name`, `approved_routes`, `ip_addresses`, ...), `id` is a number rather
+  than a string, and timestamps look like `{"seconds":...,"nanos":...}`. Re-check
+  these when bumping headscale by a major version.
 - Timestamps are always shown in **UTC** (jq's `todate`).
 - `hs route add` sends the full merged list because headscale's
-  `approve-routes` is a replace operation.
+  `approve-routes` is a replace operation (`SetApprovedRoutes`).
 - `hs` never opens a socket or resolves a name: it only execs `$HS_HEADSCALE_BIN`
   (the local `headscale` CLI), which is what makes IPv4-only and IPv6-only hosts
   equivalent to dual-stack ones. `IP` addresses and CIDRs are opaque strings
@@ -434,7 +480,8 @@ when they are installed, and skip those two checks when they are not.
 - Destructive commands refuse to run in a non-interactive shell (pipe, cron)
   unless `--force` is given.
 - Reads and writes both go through the same `headscale` binary; `hs` keeps no
-  state of its own.
+  state of its own. A command that needs the node list runs `nodes list -o json`
+  once and keeps the JSON in a shell variable for the rest of that invocation.
 - Dependencies are checked up front (`jq`, then `headscale`), so a missing
   binary is one line on stderr and exit 1 instead of a half-finished command.
   `hs help` runs before that check and works without either.
