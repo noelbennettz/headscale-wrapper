@@ -1,5 +1,8 @@
 # hs — a name-based command line wrapper for the headscale CLI
 
+> Applies to `v1.1.0` and the headscale v0.29 CLI. Documentation for an older
+> release is kept under `docs/versions/<tag>/`.
+
 [![Release](https://img.shields.io/badge/release-1.1.0-blue?logo=github)](https://github.com/noelbennettz/headscale-wrapper/releases)
 [![headscale](https://img.shields.io/badge/headscale-v0.29-blue)](https://github.com/juanfont/headscale)
 [![Bash](https://img.shields.io/badge/Bash-5.x-4EAA25?logo=gnubash&logoColor=white)](hs)

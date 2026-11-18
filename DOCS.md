@@ -1,5 +1,8 @@
 # hs — reference
 
+> Applies to `v1.1.0` and the headscale v0.29 CLI. An older release keeps its
+> documentation under `docs/versions/<tag>/`.
+
 Everything that is not part of the skeleton in [README.md](README.md): the full
 command reference, output, exit codes, environment variables, FAQ, tests, the
 mapping to the native `headscale` CLI and the parsing assumptions.
