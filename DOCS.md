@@ -75,6 +75,11 @@ You can also run it straight from the checkout, without installing:
 HS_HEADSCALE_BIN=/usr/local/bin/headscale ./hs ls
 ```
 
+Check the install: `command -v hs` prints the path it went to, `hs help` prints
+the command list without touching `headscale`, and `hs ls` prints the node table
+(or `no nodes` on a fresh server). A `command not found` after installing to a
+custom path means that directory is not in `PATH`.
+
 The installer warns when `jq` or `headscale` is missing, but does not fail on
 it. It only runs `install -m 0755` on the one destination path: it creates no
 directory, inspects nothing that is already there and replaces it. To update,
