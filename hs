@@ -58,6 +58,9 @@ on a unique prefix. IDs are numbers starting at 1.
 Timestamps (--at) are RFC3339 with a timezone; durations (-e) are whole numbers
 with a unit, largest first (y w d h m s ms), e.g. 1d12h; the default is 1h.
 Careful: -e is a timestamp in "hs expire" but a duration in "hs key new".
+
+IPv4 and IPv6 node addresses and route CIDRs are passed through unchanged; hs
+opens no socket itself, so IPv4-only and IPv6-only hosts work the same way.
 EOF
 }
 
@@ -104,6 +107,9 @@ def ts:
 
 def lst:
   ((. // []) | join(", ")) | if . == "" then "-" else . end;
+
+def csl:
+  ((. // []) | join(",")) | if . == "" then "-" else . end;
 '
 
 # ---------------------------------------------------------------- data access
@@ -288,11 +294,11 @@ cmd_ls() {
 			  (.id | tostring),
 			  (.given_name // .name // "-"),
 			  (.user.name // "-"),
-			  ((.ip_addresses // []) | join(",")),
+			  ((.ip_addresses // []) | csl),
 			  (if .online then "online" else "offline" end),
 			  (.last_seen.seconds | ts),
 			  (.expiry.seconds | ts),
-			  ((.tags // []) | join(","))
+			  ((.tags // []) | csl)
 			] )
 		| @tsv' <<<"$NODES_JSON" | render_table
 }

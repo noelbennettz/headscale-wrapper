@@ -3,7 +3,7 @@
 [![Release](https://img.shields.io/badge/release-1.0.0-blue?logo=github)](https://github.com/noelbennettz/headscale-wrapper/releases)
 [![headscale](https://img.shields.io/badge/headscale-v0.29-blue)](https://github.com/juanfont/headscale)
 [![Bash](https://img.shields.io/badge/Bash-5.x-4EAA25?logo=gnubash&logoColor=white)](hs)
-[![Tests](https://img.shields.io/badge/tests-90%20passed-brightgreen)](test/smoke.sh)
+[![Tests](https://img.shields.io/badge/tests-107%20passed-brightgreen)](test/smoke.sh)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 **hs** is a minimal command line wrapper for **headscale** — the self-hosted
@@ -25,7 +25,7 @@ where a handful of nodes on one box is the normal case, the stock CLI's
 ```console
 $ hs ls
 ID  NAME     USER   ADDRESS                       ONLINE   LAST SEEN             EXPIRY                TAGS
-1   laptop   alice  100.64.0.1,fd7a:115c:a1e0::1  online   2026-01-01T00:00:00Z  2027-01-15T08:00:00Z
+1   laptop   alice  100.64.0.1,fd7a:115c:a1e0::1  online   2026-01-01T00:00:00Z  2027-01-15T08:00:00Z  -
 2   phone    alice  100.64.0.2                    offline  2025-12-31T16:53:20Z  -                     tag:mobile
 
 $ hs expire phone --disable
@@ -80,6 +80,11 @@ approved routes: 192.168.1.0/24
 - **Stable output for pipelines**: columns aligned by `column` when it exists
   and by an internal `awk` fallback when it does not; trailing whitespace is
   stripped, timestamps are UTC, empty values are `-`
+- **IPv4, IPv6 and single-stack hosts**: node addresses are printed exactly as
+  headscale reports them — IPv4-only, IPv6-only or both, `-` when none are
+  assigned — and subnet routes accept `fd00::/64` as readily as `10.0.0.0/8`;
+  `hs` opens no socket and resolves no name of its own, so it runs unchanged on
+  IPv4-only, IPv6-only and dual-stack machines
 - **No state of its own**: reads and writes both go through the same `headscale`
   binary; two runtime environment variables, no daemon and no config file
 
@@ -294,9 +299,9 @@ hs: headscale v0.29 cannot remove all tags from a node; pass at least one tag (e
 ```console
 $ hs ls
 ID  NAME     USER   ADDRESS                       ONLINE   LAST SEEN             EXPIRY                TAGS
-1   laptop   alice  100.64.0.1,fd7a:115c:a1e0::1  online   2026-01-01T00:00:00Z  2027-01-15T08:00:00Z
+1   laptop   alice  100.64.0.1,fd7a:115c:a1e0::1  online   2026-01-01T00:00:00Z  2027-01-15T08:00:00Z  -
 2   phone    alice  100.64.0.2                    offline  2025-12-31T16:53:20Z  -                     tag:mobile
-3   laptop2  bob    100.64.0.3                    online   2026-01-01T20:40:00Z  2023-11-14T22:13:20Z
+3   laptop2  bob    100.64.0.3                    online   2026-01-01T20:40:00Z  2023-11-14T22:13:20Z  -
 
 $ hs show laptop
 ID          1
@@ -380,6 +385,22 @@ cron job cannot delete a node by accident; pass `--force` when that is exactly
 what you mean. Read commands are safe to pipe — the exit code is 1 on any
 failure and the columns have no trailing whitespace.
 
+### Does it work on IPv4-only or IPv6-only hosts?
+
+Yes. `hs` is a local wrapper: it execs the `headscale` binary on the same machine
+(which talks to the server over its local socket) and never opens a socket,
+listens on a port, or resolves a hostname itself. A host with only IPv4, only
+IPv6 or both therefore behaves identically — the test suite checks this by
+running the read commands with the network namespace unshared and by asserting
+that no `AF_INET`/`AF_INET6` socket is ever created.
+
+Address families in the data are equally irrelevant: a node that registered with
+only an IPv4 address, only an IPv6 address, or both is listed with exactly what
+headscale assigned (`ADDRESS` shows `-` before addresses are assigned), and
+`hs route add`/`hs route rm` treat IPv6 CIDRs like `fd00::/64` the same way as
+IPv4 ones. The only requirement stays the same: the local `headscale` CLI must
+work on that host.
+
 ### Does it work with headscale versions other than v0.29?
 
 Only v0.29 is verified. The script parses headscale's `--output json` by field
@@ -400,7 +421,7 @@ fixtures (`test/fixtures/`) to check argument construction and parsing. It does
 not need a real headscale and does not touch anything:
 
 ```sh
-./test/smoke.sh     # 90 passed, 0 failed
+./test/smoke.sh     # 107 passed, 0 failed
 ```
 
 The install/uninstall cases write into a temporary directory and need
@@ -433,6 +454,10 @@ that variable in normal use.
 - Timestamps are always shown in **UTC** (jq's `todate`).
 - `hs route add` sends the full merged list because headscale's
   `approve-routes` is a replace operation.
+- `hs` never opens a socket or resolves a name: it only execs `$HS_HEADSCALE_BIN`
+  (the local `headscale` CLI), which is what makes IPv4-only and IPv6-only hosts
+  equivalent to dual-stack ones. `IP` addresses and CIDRs are opaque strings
+  passed through from headscale, not parsed or family-checked locally.
 - Destructive commands refuse to run in a non-interactive shell (pipe, cron)
   unless `--force` is given.
 - Reads and writes both go through the same `headscale` binary; `hs` keeps no
