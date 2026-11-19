@@ -1,7 +1,8 @@
 # hs — reference
 
 > Applies to `v1.1.0` and the headscale v0.29 CLI. An older release keeps its
-> documentation under `docs/versions/<tag>/`.
+> documentation in the `README.md` and `DOCS.md` of that release's tag on
+> GitHub; this tree only documents the current one.
 
 Everything that is not part of the skeleton in [README.md](README.md): the full
 command reference, output, exit codes, environment variables, FAQ, tests, the
@@ -436,8 +437,12 @@ side effect is whatever headscale itself writes.
 It does not need a real headscale and does not touch anything:
 
 ```sh
-./test/smoke.sh     # 107 passed, 0 failed
+./test/smoke.sh     # prints "N passed, 0 failed" and exits non-zero on a failure
 ```
+
+`./test/docs-paths.sh` checks that every repository path the README and DOCS.md
+mention really exists (a path that was promised but never written is a test
+failure, not a broken link someone notices later).
 
 The install/uninstall cases write into a temporary directory and need
 `HS_SKIP_ROOT_CHECK=1`, which the test sets for itself; you should never need

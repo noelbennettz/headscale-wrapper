@@ -1,0 +1,101 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned tool versions. The checksums are the published release artefacts, so
+  # a replaced download fails instead of running unreviewed code.
+  SHELLCHECK_VERSION: v0.10.0
+  SHELLCHECK_SHA256: 6c881ab0698e4e6ea235245f22832860544f17ba386442fe7e9d629f8cbedf87
+  ACTIONLINT_VERSION: 1.7.7
+  ACTIONLINT_SHA256: 023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757
+
+jobs:
+  syntax:
+    name: bash syntax
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: bash -n
+        run: bash -n hs install.sh uninstall.sh test/smoke.sh test/docs-paths.sh
+
+  shellcheck:
+    name: shellcheck
+    needs: syntax
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned shellcheck
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/shellcheck"
+          mkdir -p "$dir"
+          curl -fsSL -o "$dir/shellcheck.tar.xz" \
+            "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          printf '%s  %s\n' "$SHELLCHECK_SHA256" "$dir/shellcheck.tar.xz" | sha256sum -c -
+          tar -xJf "$dir/shellcheck.tar.xz" -C "$dir"
+          printf '%s\n' "$dir/shellcheck-${SHELLCHECK_VERSION}" >>"$GITHUB_PATH"
+      - name: shellcheck --version
+        run: shellcheck --version
+      - name: shellcheck
+        run: shellcheck hs install.sh uninstall.sh test/smoke.sh test/docs-paths.sh test/fakebin/headscale
+
+  actionlint:
+    name: actionlint
+    needs: syntax
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned actionlint
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/actionlint"
+          mkdir -p "$dir"
+          curl -fsSL -o "$dir/actionlint.tar.gz" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          printf '%s  %s\n' "$ACTIONLINT_SHA256" "$dir/actionlint.tar.gz" | sha256sum -c -
+          tar -xzf "$dir/actionlint.tar.gz" -C "$dir"
+          printf '%s\n' "$dir" >>"$GITHUB_PATH"
+      - name: actionlint
+        run: actionlint
+
+  smoke:
+    name: smoke tests
+    needs: syntax
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install optional tools used by the IPv4/IPv6 cases
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends strace bubblewrap
+      - name: ./test/smoke.sh
+        run: ./test/smoke.sh
+
+  docs:
+    name: documentation paths
+    needs: syntax
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: ./test/docs-paths.sh
+        run: ./test/docs-paths.sh
