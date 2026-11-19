@@ -11,6 +11,10 @@ set -euo pipefail
 PROG=${0##*/}
 HEADSCALE_BIN=${HS_HEADSCALE_BIN:-headscale}
 
+# --json turns every read command into a JSON printer: the headscale JSON is
+# passed through instead of being formatted into a table.
+JSON=0
+
 die() { printf '%s: %s\n' "$PROG" "$*" >&2; exit 1; }
 
 usage() {
@@ -51,6 +55,10 @@ Users
 Other
   hs version                      Show the headscale version
   hs help                         Show this help
+
+  hs <read command> --json        Print the headscale JSON instead of a table
+                                  (ls, show, route, key ls, user ls, version);
+                                  --json may also come first: hs --json ls
 
 <node> accepts an ID or a name (given_name, then hostname); names also match
 on a unique prefix. IDs are numbers starting at 1.
@@ -287,6 +295,10 @@ cmd_node() {
 
 cmd_ls() {
 	load_nodes "${1:-}"
+	if ((JSON)); then
+		printf '%s\n' "$NODES_JSON"
+		return 0
+	fi
 	jq -r "$JQ_LIB"'
 		["ID", "NAME", "USER", "ADDRESS", "ONLINE", "LAST SEEN", "EXPIRY", "TAGS"],
 		( .[]
@@ -307,6 +319,10 @@ cmd_show() {
 	local id name
 	ensure_nodes
 	id=$(resolve_node "${1:-}")
+	if ((JSON)); then
+		jq --argjson id "$id" '.[] | select(.id == $id)' <<<"$NODES_JSON"
+		return 0
+	fi
 	name=$(node_display_name "$id")
 	jq -r --argjson id "$id" --arg name "$name" "$JQ_LIB"'
 		( .[] | select(.id == $id) ) as $n
@@ -447,6 +463,17 @@ route_list() {
 	local id=""
 	[[ -n $filter ]] && id=$(resolve_node "$filter")
 
+	if ((JSON)); then
+		# Always an array, even for a single node, so the shape never changes.
+		jq --arg id "$id" '
+			[ .[] | select($id == "" or (.id | tostring) == $id)
+			  | select(((.approved_routes // []) | length) > 0
+				  or ((.available_routes // []) | length) > 0
+				  or ((.subnet_routes // []) | length) > 0)
+			]' <<<"$NODES_JSON"
+		return 0
+	fi
+
 	jq -r --arg id "$id" "$JQ_LIB"'
 		["ID", "NAME", "APPROVED", "AVAILABLE", "SERVING"],
 		( .[]
@@ -568,6 +595,10 @@ key_new() {
 key_ls() {
 	local json
 	json=$("$HEADSCALE_BIN" preauthkeys list -o json) || die "failed to list keys"
+	if ((JSON)); then
+		printf '%s\n' "$json"
+		return 0
+	fi
 	jq -r "$JQ_LIB"'
 		["ID", "KEY", "REUSABLE", "EPHEMERAL", "USED", "EXPIRY", "OWNER"],
 		( .[]
@@ -614,6 +645,10 @@ cmd_user() {
 user_ls() {
 	local json
 	json=$("$HEADSCALE_BIN" users list -o json) || die "failed to list users"
+	if ((JSON)); then
+		printf '%s\n' "$json"
+		return 0
+	fi
 	jq -r "$JQ_LIB"'
 		["ID", "NAME", "DISPLAY", "EMAIL", "CREATED"],
 		( .[]
@@ -669,7 +704,37 @@ user_rm() {
 
 # ---------------------------------------------------------------- entrypoint
 
+# version prints what headscale prints. --json wraps the same text: `version`
+# is the bare version string parsed out of it and `raw` keeps the original
+# lines, because headscale's own version output is not JSON and inventing a
+# schema for commit/build time would break on the next release.
+cmd_version() {
+	local raw first
+	raw=$("$HEADSCALE_BIN" version) || exit $?
+	if ((JSON)); then
+		first=${raw%%$'\n'*}
+		jq -n --arg raw "$raw" --arg first "$first" '
+			{version: (try ($first | capture("version[ ]+(?<v>[^ ]+)").v) catch null),
+			 raw: $raw}'
+		return 0
+	fi
+	printf '%s\n' "$raw"
+}
+
 main() {
+	# Global flags may appear anywhere before the command's own arguments.
+	# They are stripped here so every subcommand keeps its existing parser,
+	# and a value that happens to be called --json is not a supported case.
+	local -a passed=()
+	while (($#)); do
+		case $1 in
+		--json) JSON=1 ;;
+		*) passed+=("$1") ;;
+		esac
+		shift
+	done
+	set -- ${passed[@]+"${passed[@]}"}
+
 	local cmd=${1:-ls}
 	(($#)) && shift
 
@@ -689,7 +754,7 @@ main() {
 	route | routes) cmd_route "$@" ;;
 	key | keys | preauthkey | authkey) cmd_key "$@" ;;
 	user | users) cmd_user "$@" ;;
-	version) "$HEADSCALE_BIN" version ;;
+	version) cmd_version ;;
 	*) die "unknown command: $cmd (try hs help)" ;;
 	esac
 }
