@@ -50,7 +50,10 @@ ID  NAME     USER   ADDRESS                       ONLINE   LAST SEEN            
 `hs route add laptop 192.168.1.0/24` approves a subnet route. `hs key new -u
 alice -e 24h` prints a preauthkey and nothing else, and `hs user ls`,
 `hs user new <name>`, `hs user rm <name>` manage users. Destructive commands ask
-first and refuse in a non-interactive shell unless `--force` is given.
+first and refuse in a non-interactive shell unless `--force` is given. Add
+`--json` to a read command (`hs ls --json`, `hs show laptop --json`, `hs route
+--json`, `hs key ls`, `hs user ls`, `hs version`) to get headscale's JSON
+instead of the table.
 
 ## Documentation
 

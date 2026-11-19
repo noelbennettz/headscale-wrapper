@@ -18,6 +18,7 @@ mapping to the native `headscale` CLI and the parsing assumptions.
 - [Dates, durations and numbers](#dates-durations-and-numbers)
 - [Tags](#tags)
 - [Sample output](#sample-output)
+- [JSON output](#json-output)
 - [Exit codes](#exit-codes)
 - [Environment variables](#environment-variables)
 - [FAQ](#faq)
@@ -53,6 +54,10 @@ mapping to the native `headscale` CLI and the parsing assumptions.
   assigned — and subnet routes accept `fd00::/64` as readily as `10.0.0.0/8`;
   `hs` opens no socket and resolves no name of its own, so it runs unchanged on
   IPv4-only, IPv6-only and dual-stack machines
+- **`--json` on the read commands**: `hs ls --json`, `hs show`, `hs route`,
+  `hs key ls`, `hs user ls` and `hs version` print headscale's JSON instead of a
+  table, unchanged, so scripts can use the same name resolution and get the raw
+  fields
 - **No state of its own**: reads and writes both go through the same `headscale`
   binary; two runtime environment variables, no daemon and no config file
 
@@ -338,6 +343,57 @@ values with a comma and show `-` when the list is empty; `EXPIRY` is `-` when th
 node has no expiry; `OWNER` in `hs key ls` shows the key's ACL tags when it has
 any and the user name otherwise; `DISPLAY`, `EMAIL` and `CREATED` fall back to
 `-` for fields headscale leaves empty.
+
+## JSON output
+
+`--json` turns a read command into a JSON printer. It may come before or after
+the command (`hs --json ls` and `hs ls --json` are the same) and it applies to
+`hs ls`, `hs show`, `hs route`, `hs key ls`, `hs user ls` and `hs version`:
+
+```console
+$ hs ls --json
+[
+  {
+    "id": 1,
+    "machine_key": "mkey:abc123",
+    ...
+    "given_name": "laptop",
+    "approved_routes": ["192.168.1.0/24"],
+    "ip_addresses": ["100.64.0.1", "fd7a:115c:a1e0::1"]
+  }
+]
+
+$ hs show laptop --json | jq -r .user.name
+alice
+```
+
+What each one prints:
+
+| Command | JSON |
+| --- | --- |
+| `hs ls [user] --json` | Headscale's `nodes list -o json`, byte for byte |
+| `hs show <node> --json` | The one node object, resolved by name/ID/prefix like the table |
+| `hs route [node] --json` | An array of the nodes the table would show — always an array, even for one node or none |
+| `hs key ls --json` | Headscale's `preauthkeys list -o json`, byte for byte |
+| `hs user ls --json` | Headscale's `users list -o json`, byte for byte |
+| `hs version --json` | `{"version": "0.29.0", "raw": "<headscale version output>"}` |
+
+`hs ls` and `hs route` are the only two that filter, and they filter the same
+way with and without `--json`. The pass-through commands do not re-encode the
+JSON, so the field names, ordering and key masking are exactly what headscale
+emits; `--json` on `hs show` re-serialises the single object, which is the one
+case where the layout comes from `jq`.
+
+`hs version --json` is the exception that does not pass anything through:
+headscale prints its version as text (`headscale version v0.29.0`, plus commit
+and build time), so `hs` parses the version out of the first line and keeps the
+original text in `raw` rather than promising a schema for fields headscale may
+rename.
+
+Write commands ignore `--json` — `hs key new` already prints only the key, and
+the destructive commands print one line per action. Exit codes do not change:
+`--json` never turns an error into an empty document, it fails the same way the
+table would.
 
 ## Exit codes
 

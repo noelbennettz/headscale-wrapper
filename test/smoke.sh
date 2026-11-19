@@ -360,6 +360,69 @@ out=$("$hs" user rm 0 --force 2>&1)
 check_status "user rm: rejects ID 0" 1 $?
 check_contains "user rm: ID 0 hint" "must be 1 or greater" "$out"
 
+# ---------------------------------------------------------------- json output
+
+# check_json <name> <jq filter> <json>
+check_json() {
+	local name=$1 filter=$2 json=$3
+	if jq -e "$filter" <<<"$json" >/dev/null 2>&1; then
+		ok "$name"
+	else
+		ng "$name" "$filter" "$json"
+	fi
+}
+
+out=$("$hs" ls --json)
+check_status "ls --json: exits 0" 0 $?
+check_json "ls --json: headscale array" 'length == 3 and .[0].given_name == "laptop"' "$out"
+check_not_contains "ls --json: no table header" "ID  NAME" "$out"
+if [[ $out == "$(cat "$here/fixtures/nodes.json")" ]]; then
+	ok "ls --json: passed through unchanged"
+else
+	ng "ls --json: passed through unchanged" "" "$out"
+fi
+
+out=$("$hs" --json ls)
+check_json "--json before the command" 'length == 3' "$out"
+
+out=$("$hs" ls alice --json)
+check_json "ls --json: user argument still reaches headscale" 'length == 3' "$out"
+
+out=$("$hs" show laptop --json)
+check_json "show --json: single node object" '.id == 1 and .given_name == "laptop"' "$out"
+check_not_contains "show --json: no label columns" "ID          " "$out"
+
+out=$("$hs" show 2 --json)
+check_json "show --json: accepts an ID" '.name == "pixel-8"' "$out"
+
+out=$("$hs" show lap --json 2>&1)
+check_status "show --json: ambiguity is still an error" 1 $?
+check_contains "show --json: ambiguity lists candidates" "1:laptop, 3:laptop2" "$out"
+
+out=$("$hs" route --json)
+check_json "route --json: only nodes with routes" 'length == 1 and .[0].id == 1' "$out"
+check_not_contains "route --json: no table header" "APPROVED" "$out"
+
+out=$("$hs" route laptop --json)
+check_json "route --json: one node stays an array" 'length == 1 and .[0].approved_routes == ["192.168.1.0/24"]' "$out"
+
+out=$("$hs" route phone --json)
+check_json "route --json: a node without routes is an empty array" 'length == 0' "$out"
+
+out=$("$hs" key ls --json)
+check_json "key ls --json" 'length == 2 and .[0].id == 1' "$out"
+check_not_contains "key ls --json: no table header" "REUSABLE" "$out"
+
+out=$("$hs" user ls --json)
+check_json "user ls --json" 'length == 2 and .[0].name == "alice"' "$out"
+
+out=$("$hs" version --json)
+check_json "version --json: version parsed" '.version == "0.29.0"' "$out"
+check_json "version --json: raw text kept" '.raw | startswith("headscale version")' "$out"
+
+out=$("$hs" help)
+check_contains "help: documents --json" "--json" "$out"
+
 # ---------------------------------------------------------------- deps and errors
 
 out=$("$hs" version)
