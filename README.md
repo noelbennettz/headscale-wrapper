@@ -1,7 +1,8 @@
 # hs — a name-based command line wrapper for the headscale CLI
 
 > Applies to `v1.1.0` and the headscale v0.29 CLI. Documentation for an older
-> release is kept under `docs/versions/<tag>/`.
+> release lives in the `README.md` and `DOCS.md` of that release's tag on
+> GitHub; this tree only documents the current one.
 
 [![Release](https://img.shields.io/badge/release-1.1.0-blue?logo=github)](https://github.com/noelbennettz/headscale-wrapper/releases)
 [![headscale](https://img.shields.io/badge/headscale-v0.29-blue)](https://github.com/juanfont/headscale)
@@ -57,6 +58,7 @@ first and refuse in a non-interactive shell unless `--force` is given.
 | --- | --- |
 | [DOCS.md](DOCS.md) | Full command reference, sample output, exit codes, environment variables, FAQ, mapping to the native CLI, implementation notes |
 | [test/smoke.sh](test/smoke.sh) | Smoke test suite: a fake `headscale` and fixed fixtures, no real server needed |
+| [.github/workflows/](.github/workflows/) | CI: `bash -n`, pinned `shellcheck` and `actionlint`, smoke tests, documentation path check |
 
 ## Licence
 
