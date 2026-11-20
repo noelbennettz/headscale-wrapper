@@ -27,7 +27,8 @@ same server, and bash 5.x. `column` from util-linux is optional.
 
 ```sh
 ./install.sh                 # as root; copies to /usr/local/bin/hs
-./install.sh /usr/bin/hs     # or pick another path
+./install.sh /usr/bin/hs     # or pick the exact path
+./install.sh --prefix "$HOME/.local"   # without root: ~/.local/bin/hs
 ./uninstall.sh               # removes the script, nothing else
 ```
 
