@@ -111,12 +111,17 @@ jobs:
     name: smoke tests
     needs: syntax
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install optional tools used by the IPv4/IPv6 cases
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends strace bubblewrap
+        # strace and bubblewrap only add three checks; the suite skips them when
+        # they are missing, so a slow apt mirror must not hold the job hostage.
+        run: |
+          sudo timeout 180 apt-get update || true
+          sudo timeout 180 apt-get install -y --no-install-recommends strace bubblewrap || true
       - name: ./test/smoke.sh
         run: ./test/smoke.sh
 
