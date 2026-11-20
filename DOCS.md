@@ -73,11 +73,12 @@ halfway through.
 hs: jq not found. Install it first (Debian/Ubuntu: apt-get install -y jq, RHEL family: dnf install -y jq)
 ```
 
-Install as root:
+Install as root for the default path:
 
 ```sh
 ./install.sh                 # copies to /usr/local/bin/hs (default)
-./install.sh /usr/bin/hs     # or pick another path
+./install.sh /usr/bin/hs     # or pick the exact path
+./install.sh --prefix /opt/hs   # or a prefix: /opt/hs/bin/hs
 ```
 
 You can also run it straight from the checkout, without installing:
@@ -86,16 +87,30 @@ You can also run it straight from the checkout, without installing:
 HS_HEADSCALE_BIN=/usr/local/bin/headscale ./hs ls
 ```
 
+Without root, install under a prefix you own — `--prefix` is the same knob for
+`install.sh` and `uninstall.sh`, and it is the only form that creates a
+directory (`PREFIX/bin`):
+
+```sh
+./install.sh --prefix "$HOME/.local"      # ~/.local/bin/hs
+./uninstall.sh --prefix "$HOME/.local"
+export PATH="$HOME/.local/bin:$PATH"      # if it is not in PATH already
+```
+
 Check the install: `command -v hs` prints the path it went to, `hs help` prints
 the command list without touching `headscale`, and `hs ls` prints the node table
 (or `no nodes` on a fresh server). A `command not found` after installing to a
-custom path means that directory is not in `PATH`.
+custom path means that directory is not in `PATH`; the installer says so
+(`note: <dir> is not in PATH`) and warns when a different `hs` would win.
 
-The installer warns when `jq` or `headscale` is missing, but does not fail on
-it. It only runs `install -m 0755` on the one destination path: it creates no
-directory, inspects nothing that is already there and replaces it. To update,
-pull and install again — `install.sh` overwrites the script in place, so there is
-no state to migrate and nothing else on the machine changes:
+The installer checks that the destination directory exists and is writable by
+you before touching anything, and its failure messages say which of the three
+ways out applies: run it with `sudo`, create the missing directory, or use
+`--prefix`. It warns when `jq` or `headscale` is missing but does not fail on
+it. Apart from `--prefix` creating `PREFIX/bin`, it creates no directory,
+inspects nothing that is already there and replaces the one destination file.
+To update, pull and install again — `install.sh` overwrites the script in place,
+so there is no state to migrate and nothing else on the machine changes:
 
 ```sh
 git pull
@@ -451,7 +466,7 @@ installer and uninstaller.
 |---|---|---|
 | `HS_HEADSCALE_BIN` | `headscale` | The headscale binary `hs` calls. A bare name is looked up in `PATH`, a path is used as given; `hs` also uses it for the up-front existence check. Set it to run `hs` against a non-default install, e.g. `HS_HEADSCALE_BIN=/usr/local/bin/headscale ./hs ls` |
 | `HS_DEFAULT_USER` | *unset* | Fallback for `hs key new` when `-u` is omitted. With neither set, `hs` uses the only user when headscale has exactly one and otherwise fails with `a user is required: hs key new -u <name>` |
-| `HS_SKIP_ROOT_CHECK` | `0` | Set to `1` to let `install.sh` / `uninstall.sh` run as a non-root user. Any other value leaves the root check in place. `test/smoke.sh` sets it for itself; normal use should never need it |
+| `HS_SKIP_ROOT_CHECK` | `0` | Set to `1` to let `install.sh` / `uninstall.sh` skip the write-access check, e.g. when installing into a directory that a container wrote. Any other value leaves the check in place. `test/smoke.sh` sets it for itself; normal use should never need it |
 
 ## FAQ
 

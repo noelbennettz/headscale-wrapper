@@ -581,6 +581,67 @@ out=$(HS_SKIP_ROOT_CHECK=1 "$here/../uninstall.sh" "$bindir/hs" 2>&1)
 check_status "uninstall: idempotent" 0 $?
 check_contains "uninstall: reports nothing to do" "not installed" "$out"
 
+# --prefix is the same knob for both scripts: PREFIX/bin/hs, created on install.
+prefix=$tmp/prefix
+out=$(HS_SKIP_ROOT_CHECK=1 "$here/../install.sh" --prefix "$prefix" 2>&1)
+check_status "install --prefix: succeeds" 0 $?
+check_contains "install --prefix: reports the path" "installed $prefix/bin/hs" "$out"
+if [[ -x $prefix/bin/hs ]]; then
+	ok "install --prefix: creates PREFIX/bin"
+else
+	ng "install --prefix: creates PREFIX/bin" "$prefix/bin/hs" "missing"
+fi
+out=$(PATH="$here/fakebin:$prefix/bin:$PATH" "$prefix/bin/hs" version 2>&1)
+check_contains "install --prefix: installed copy runs" "0.29.0" "$out"
+
+out=$(HS_SKIP_ROOT_CHECK=1 "$here/../uninstall.sh" --prefix "$prefix" 2>&1)
+check_status "uninstall --prefix: succeeds" 0 $?
+if [[ -e $prefix/bin/hs ]]; then
+	ng "uninstall --prefix: removes the same file" "" "still present"
+else
+	ok "uninstall --prefix: removes the same file"
+fi
+
+# A path in a directory that does not exist fails with a hint instead of an
+# install(1) error, and never creates the tree.
+out=$(HS_SKIP_ROOT_CHECK=1 "$here/../install.sh" "$tmp/missing-dir/hs" 2>&1)
+check_status "install: missing directory is an error" 1 $?
+check_contains "install: missing directory hint" "does not exist" "$out"
+if [[ -e $tmp/missing-dir ]]; then
+	ng "install: does not create a directory for a plain path" "" "created"
+else
+	ok "install: does not create a directory for a plain path"
+fi
+
+# Non-root guidance: a directory the caller cannot write to must say so and
+# point at --prefix rather than at a bare "permission denied".
+if [[ $(id -u) -ne 0 ]]; then
+	readonlydir=$tmp/readonly
+	mkdir -p "$readonlydir"
+	chmod 0555 "$readonlydir"
+	out=$("$here/../install.sh" "$readonlydir/hs" 2>&1)
+	check_status "install: unwritable directory is an error" 1 $?
+	check_contains "install: suggests sudo or --prefix" "not writable" "$out"
+	check_contains "install: names the --prefix alternative" "--prefix" "$out"
+	if [[ -e $readonlydir/hs ]]; then
+		ng "install: nothing written to the read-only directory" "" "written"
+	else
+		ok "install: nothing written to the read-only directory"
+	fi
+	chmod 0755 "$readonlydir"
+fi
+
+# --help works without touching anything.
+out=$("$here/../install.sh" --help 2>&1)
+check_status "install: --help exits 0" 0 $?
+check_contains "install: --help documents --prefix" "--prefix" "$out"
+out=$("$here/../uninstall.sh" --help 2>&1)
+check_status "uninstall: --help exits 0" 0 $?
+check_contains "uninstall: --help documents --prefix" "--prefix" "$out"
+
+out=$("$here/../install.sh" --nosuchflag 2>&1)
+check_status "install: unknown option exits 1" 1 $?
+
 # ---------------------------------------------------------------- summary
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
