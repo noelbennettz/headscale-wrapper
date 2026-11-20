@@ -34,22 +34,22 @@ prefix=
 dest=
 while (($#)); do
 	case $1 in
-	-p | --prefix)
-		shift
-		(($#)) || die "--prefix needs a directory"
-		prefix=$1
-		dest=$prefix/bin/hs
-		;;
-	-h | --help)
-		usage
-		exit 0
-		;;
-	-*)
-		printf 'install: unknown option: %s\n\n' "$1" >&2
-		usage >&2
-		exit 1
-		;;
-	*) dest=$1 ;;
+		-p | --prefix)
+			shift
+			(($#)) || die "--prefix needs a directory"
+			prefix=$1
+			dest=$prefix/bin/hs
+			;;
+		-h | --help)
+			usage
+			exit 0
+			;;
+		-*)
+			printf 'install: unknown option: %s\n\n' "$1" >&2
+			usage >&2
+			exit 1
+			;;
+		*) dest=$1 ;;
 	esac
 	shift
 done
@@ -83,15 +83,14 @@ done
 # Two ways the install can look broken afterwards, both about PATH rather than
 # about the file: the directory is not searched at all, or another hs wins.
 case ":$PATH:" in
-*":$dir:"*) ;;
-*)
-	printf 'note: %s is not in PATH, so plain `hs` will not find it. Add it:\n' "$dir" >&2
-	printf '      export PATH="%s:$PATH"\n' "$dir" >&2
-	;;
+	*":$dir:"*) ;;
+	*)
+		printf 'note: %s is not in PATH, so plain `hs` will not find it. Add it:\n' "$dir" >&2
+		printf '      export PATH="%s:$PATH"\n' "$dir" >&2
+		;;
 esac
 
 found=$(command -v hs 2>/dev/null || true)
 if [[ -n $found && $found != "$dest" ]]; then
 	printf 'note: `hs` currently resolves to %s, which is not this install\n' "$found" >&2
 fi
-

@@ -20,7 +20,10 @@ JSON=0
 # (and scripted) without prompts.
 DRY_RUN=0
 
-die() { printf '%s: %s\n' "$PROG" "$*" >&2; exit 1; }
+die() {
+	printf '%s: %s\n' "$PROG" "$*" >&2
+	exit 1
+}
 
 usage() {
 	cat <<'EOF'
@@ -200,10 +203,10 @@ resolve_node() {
 		  end' <<<"$NODES_JSON")
 
 	case $out in
-	NOTFOUND) die "no such node: $q" ;;
-	AMBIG:*) die "ambiguous node name: $q matches several (${out#AMBIG:}), use the ID instead" ;;
-	"") die "failed to resolve node: $q" ;;
-	*) printf '%s\n' "$out" ;;
+		NOTFOUND) die "no such node: $q" ;;
+		AMBIG:*) die "ambiguous node name: $q matches several (${out#AMBIG:}), use the ID instead" ;;
+		"") die "failed to resolve node: $q" ;;
+		*) printf '%s\n' "$out" ;;
 	esac
 }
 
@@ -249,9 +252,9 @@ resolve_user() {
 		  end' <<<"$users")
 
 	case $out in
-	NOTFOUND) die "no such user: $q" ;;
-	AMBIG:*) die "ambiguous user: $q (${out#AMBIG:})" ;;
-	*) printf '%s\n' "$out" ;;
+		NOTFOUND) die "no such user: $q" ;;
+		AMBIG:*) die "ambiguous user: $q (${out#AMBIG:})" ;;
+		*) printf '%s\n' "$out" ;;
 	esac
 }
 
@@ -308,17 +311,17 @@ cmd_node() {
 	local sub=${1:-ls}
 	(($#)) && shift
 	case $sub in
-	ls | list) cmd_ls "${1:-}" ;;
-	show | info | get) cmd_show "${1:-}" ;;
-	rm | del | delete | remove) cmd_rm "$@" ;;
-	rename | mv | name) cmd_rename "$@" ;;
-	tag | tags) cmd_tag "$@" ;;
-	expire | logout | reauth) cmd_expire "$@" ;;
-	route | routes) cmd_route "$@" ;;
-	*)
-		die "unknown node subcommand: $sub (available: ls, show, rm, rename, tag, expire, route;" \
-			"to filter by user use: hs ls <user>)"
-		;;
+		ls | list) cmd_ls "${1:-}" ;;
+		show | info | get) cmd_show "${1:-}" ;;
+		rm | del | delete | remove) cmd_rm "$@" ;;
+		rename | mv | name) cmd_rename "$@" ;;
+		tag | tags) cmd_tag "$@" ;;
+		expire | logout | reauth) cmd_expire "$@" ;;
+		route | routes) cmd_route "$@" ;;
+		*)
+			die "unknown node subcommand: $sub (available: ls, show, rm, rename, tag, expire, route;" \
+				"to filter by user use: hs ls <user>)"
+			;;
 	esac
 }
 
@@ -374,9 +377,9 @@ cmd_rm() {
 	local -a targets=()
 	while (($#)); do
 		case $1 in
-		-f | --force) force=1 ;;
-		-*) die "unknown option: $1" ;;
-		*) targets+=("$1") ;;
+			-f | --force) force=1 ;;
+			-*) die "unknown option: $1" ;;
+			*) targets+=("$1") ;;
 		esac
 		shift
 	done
@@ -444,14 +447,14 @@ cmd_expire() {
 	local disable=0 at="" at_set=0
 	while (($#)); do
 		case $1 in
-		-d | --disable) disable=1 ;;
-		--at | -e)
-			shift
-			[[ $# -gt 0 ]] || die "--at needs a timestamp (RFC3339)"
-			at=$1
-			at_set=1
-			;;
-		*) die "unknown option: $1" ;;
+			-d | --disable) disable=1 ;;
+			--at | -e)
+				shift
+				[[ $# -gt 0 ]] || die "--at needs a timestamp (RFC3339)"
+				at=$1
+				at_set=1
+				;;
+			*) die "unknown option: $1" ;;
 		esac
 		shift
 	done
@@ -493,16 +496,16 @@ cmd_expire() {
 cmd_route() {
 	local sub=${1:-ls}
 	case $sub in
-	add)
-		shift
-		route_add "$@"
-		;;
-	rm | del | remove)
-		shift
-		route_rm "$@"
-		;;
-	ls | list | "") route_list "${2:-}" ;;
-	*) route_list "$sub" ;;
+		add)
+			shift
+			route_add "$@"
+			;;
+		rm | del | remove)
+			shift
+			route_rm "$@"
+			;;
+		ls | list | "") route_list "${2:-}" ;;
+		*) route_list "$sub" ;;
 	esac
 }
 
@@ -604,11 +607,11 @@ cmd_key() {
 	local sub=${1:-ls}
 	(($#)) && shift
 	case $sub in
-	new | create | add) key_new "$@" ;;
-	ls | list) key_ls ;;
-	rm | del | delete) key_action delete "$@" ;;
-	expire | revoke) key_action expire "$@" ;;
-	*) die "unknown key subcommand: $sub (available: new, ls, rm, expire)" ;;
+		new | create | add) key_new "$@" ;;
+		ls | list) key_ls ;;
+		rm | del | delete) key_action delete "$@" ;;
+		expire | revoke) key_action expire "$@" ;;
+		*) die "unknown key subcommand: $sub (available: new, ls, rm, expire)" ;;
 	esac
 }
 
@@ -617,25 +620,25 @@ key_new() {
 	local -a tags=()
 	while (($#)); do
 		case $1 in
-		-u | --user)
-			shift
-			[[ $# -gt 0 ]] || die "-u needs a user name"
-			user=$1
-			;;
-		-e | --expiration)
-			shift
-			[[ $# -gt 0 ]] || die "-e needs a duration (e.g. 30m, 24h)"
-			exp=$1
-			[[ -n $exp ]] || die "-e needs a duration (e.g. 30m, 24h)"
-			;;
-		-r | --reusable) reusable=1 ;;
-		-E | --ephemeral) ephemeral=1 ;;
-		-t | --tag)
-			shift
-			[[ $# -gt 0 ]] || die "-t needs a tag"
-			tags+=("$1")
-			;;
-		*) die "unknown option: $1" ;;
+			-u | --user)
+				shift
+				[[ $# -gt 0 ]] || die "-u needs a user name"
+				user=$1
+				;;
+			-e | --expiration)
+				shift
+				[[ $# -gt 0 ]] || die "-e needs a duration (e.g. 30m, 24h)"
+				exp=$1
+				[[ -n $exp ]] || die "-e needs a duration (e.g. 30m, 24h)"
+				;;
+			-r | --reusable) reusable=1 ;;
+			-E | --ephemeral) ephemeral=1 ;;
+			-t | --tag)
+				shift
+				[[ $# -gt 0 ]] || die "-t needs a tag"
+				tags+=("$1")
+				;;
+			*) die "unknown option: $1" ;;
 		esac
 		shift
 	done
@@ -704,10 +707,10 @@ cmd_user() {
 	local sub=${1:-ls}
 	(($#)) && shift
 	case $sub in
-	ls | list) user_ls ;;
-	new | create | add) user_new "$@" ;;
-	rm | del | delete | destroy) user_rm "$@" ;;
-	*) die "unknown user subcommand: $sub (available: ls, new, rm)" ;;
+		ls | list) user_ls ;;
+		new | create | add) user_new "$@" ;;
+		rm | del | delete | destroy) user_rm "$@" ;;
+		*) die "unknown user subcommand: $sub (available: ls, new, rm)" ;;
 	esac
 }
 
@@ -746,9 +749,9 @@ user_rm() {
 	local -a targets=()
 	while (($#)); do
 		case $1 in
-		-f | --force) force=1 ;;
-		-*) die "unknown option: $1" ;;
-		*) targets+=("$1") ;;
+			-f | --force) force=1 ;;
+			-*) die "unknown option: $1" ;;
+			*) targets+=("$1") ;;
 		esac
 		shift
 	done
@@ -805,9 +808,9 @@ main() {
 	local -a passed=()
 	while (($#)); do
 		case $1 in
-		--json) JSON=1 ;;
-		--dry-run) DRY_RUN=1 ;;
-		*) passed+=("$1") ;;
+			--json) JSON=1 ;;
+			--dry-run) DRY_RUN=1 ;;
+			*) passed+=("$1") ;;
 		esac
 		shift
 	done
@@ -817,23 +820,27 @@ main() {
 	(($#)) && shift
 
 	# Help must work even where jq or headscale is missing or broken.
-	case $cmd in help | -h | --help) usage; return 0 ;; esac
+	case $cmd in help | -h | --help)
+		usage
+		return 0
+		;;
+	esac
 
 	require_deps
 
 	case $cmd in
-	ls | list) cmd_ls "${1:-}" ;;
-	node | nodes) cmd_node "$@" ;;
-	show | info) cmd_show "${1:-}" ;;
-	rm | del | delete) cmd_rm "$@" ;;
-	rename | mv) cmd_rename "$@" ;;
-	tag | tags) cmd_tag "$@" ;;
-	expire | logout) cmd_expire "$@" ;;
-	route | routes) cmd_route "$@" ;;
-	key | keys | preauthkey | authkey) cmd_key "$@" ;;
-	user | users) cmd_user "$@" ;;
-	version) cmd_version ;;
-	*) die "unknown command: $cmd (try hs help)" ;;
+		ls | list) cmd_ls "${1:-}" ;;
+		node | nodes) cmd_node "$@" ;;
+		show | info) cmd_show "${1:-}" ;;
+		rm | del | delete) cmd_rm "$@" ;;
+		rename | mv) cmd_rename "$@" ;;
+		tag | tags) cmd_tag "$@" ;;
+		expire | logout) cmd_expire "$@" ;;
+		route | routes) cmd_route "$@" ;;
+		key | keys | preauthkey | authkey) cmd_key "$@" ;;
+		user | users) cmd_user "$@" ;;
+		version) cmd_version ;;
+		*) die "unknown command: $cmd (try hs help)" ;;
 	esac
 }
 

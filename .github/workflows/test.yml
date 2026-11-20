@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # A weekly run so a stale fixture or a new linter release shows up even when
+  # nobody pushes.
+  schedule:
+    - cron: "23 5 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -20,6 +24,8 @@ env:
   SHELLCHECK_SHA256: 6c881ab0698e4e6ea235245f22832860544f17ba386442fe7e9d629f8cbedf87
   ACTIONLINT_VERSION: 1.7.7
   ACTIONLINT_SHA256: 023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757
+  SHFMT_VERSION: 3.12.0
+  SHFMT_SHA256: d9fbb2a9c33d13f47e7618cf362a914d029d02a6df124064fff04fd688a745ea
 
 jobs:
   syntax:
@@ -54,6 +60,31 @@ jobs:
         run: shellcheck --version
       - name: shellcheck
         run: shellcheck hs install.sh uninstall.sh test/smoke.sh test/docs-paths.sh test/integration.sh test/fakebin/headscale
+
+  format:
+    name: shfmt
+    needs: syntax
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned shfmt
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/shfmt"
+          mkdir -p "$dir"
+          curl -fsSL -o "$dir/shfmt" \
+            "https://github.com/mvdan/sh/releases/download/v${SHFMT_VERSION}/shfmt_v${SHFMT_VERSION}_linux_amd64"
+          printf '%s  %s\n' "$SHFMT_SHA256" "$dir/shfmt" | sha256sum -c -
+          chmod +x "$dir/shfmt"
+          printf '%s\n' "$dir" >>"$GITHUB_PATH"
+      - name: shfmt -d
+        # -i 0 keeps tabs, -ci indents case branches: the repo is formatted to
+        # that style, so a diff means a file was not formatted.
+        run: |
+          shfmt --version
+          shfmt -d -ci -i 0 hs install.sh uninstall.sh test/smoke.sh test/docs-paths.sh test/integration.sh test/fakebin/headscale
 
   actionlint:
     name: actionlint

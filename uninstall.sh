@@ -31,23 +31,23 @@ dest=
 force=0
 while (($#)); do
 	case $1 in
-	-p | --prefix)
-		shift
-		(($#)) || die "--prefix needs a directory"
-		prefix=$1
-		dest=$prefix/bin/hs
-		;;
-	-f | --force) force=1 ;;
-	-h | --help)
-		usage
-		exit 0
-		;;
-	-*)
-		printf 'uninstall: unknown option: %s\n\n' "$1" >&2
-		usage >&2
-		exit 1
-		;;
-	*) dest=$1 ;;
+		-p | --prefix)
+			shift
+			(($#)) || die "--prefix needs a directory"
+			prefix=$1
+			dest=$prefix/bin/hs
+			;;
+		-f | --force) force=1 ;;
+		-h | --help)
+			usage
+			exit 0
+			;;
+		-*)
+			printf 'uninstall: unknown option: %s\n\n' "$1" >&2
+			usage >&2
+			exit 1
+			;;
+		*) dest=$1 ;;
 	esac
 	shift
 done
@@ -80,4 +80,3 @@ printf 'removed %s\n' "$dest"
 if other=$(command -v hs 2>/dev/null); then
 	printf 'note: %s is still on PATH, check it if you expected hs to be gone\n' "$other" >&2
 fi
-
