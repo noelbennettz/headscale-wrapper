@@ -1,0 +1,127 @@
+name: release
+
+# Pushing a v* tag is the release trigger. This workflow never creates a tag;
+# it only verifies the tree, produces the checksums, attests the artefacts and
+# attaches them to the tag's GitHub release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)release, e.g. v1.1.0"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  SHELLCHECK_VERSION: v0.10.0
+  SHELLCHECK_SHA256: 6c881ab0698e4e6ea235245f22832860544f17ba386442fe7e9d629f8cbedf87
+  ACTIONLINT_VERSION: 1.7.7
+  ACTIONLINT_SHA256: 023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757
+
+jobs:
+  verify:
+    name: verify ${{ github.ref_name }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - name: Install pinned shellcheck
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/shellcheck"
+          mkdir -p "$dir"
+          curl -fsSL -o "$dir/shellcheck.tar.xz" \
+            "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          printf '%s  %s\n' "$SHELLCHECK_SHA256" "$dir/shellcheck.tar.xz" | sha256sum -c -
+          tar -xJf "$dir/shellcheck.tar.xz" -C "$dir"
+          printf '%s\n' "$dir/shellcheck-${SHELLCHECK_VERSION}" >>"$GITHUB_PATH"
+      - name: Install pinned actionlint
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/actionlint"
+          mkdir -p "$dir"
+          curl -fsSL -o "$dir/actionlint.tar.gz" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          printf '%s  %s\n' "$ACTIONLINT_SHA256" "$dir/actionlint.tar.gz" | sha256sum -c -
+          tar -xzf "$dir/actionlint.tar.gz" -C "$dir"
+          printf '%s\n' "$dir" >>"$GITHUB_PATH"
+      - name: bash -n
+        run: bash -n hs install.sh uninstall.sh test/smoke.sh test/docs-paths.sh test/integration.sh test/fakebin/headscale
+      - name: shellcheck
+        run: shellcheck hs install.sh uninstall.sh test/smoke.sh test/docs-paths.sh test/integration.sh test/fakebin/headscale
+      - name: actionlint
+        run: actionlint
+      - name: ./test/smoke.sh
+        run: ./test/smoke.sh
+      - name: ./test/docs-paths.sh
+        run: ./test/docs-paths.sh
+      - name: tag looks like a release tag
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ ! $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "release: $TAG is not a vMAJOR.MINOR.PATCH tag" >&2
+            exit 1
+          fi
+
+  release:
+    name: attach artefacts
+    needs: verify
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - name: Build SHA256SUMS
+        run: |
+          set -euo pipefail
+          sha256sum hs install.sh uninstall.sh >SHA256SUMS
+          cat SHA256SUMS
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            hs
+            install.sh
+            uninstall.sh
+            SHA256SUMS
+      - name: Create or update the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" --repo "$REPO" --clobber hs install.sh uninstall.sh SHA256SUMS
+          else
+            gh release create "$TAG" --repo "$REPO" --verify-tag \
+              --title "hs $TAG" --generate-notes \
+              hs install.sh uninstall.sh SHA256SUMS
+          fi
+      - name: Release summary
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          {
+            echo "### $TAG"
+            echo
+            echo "Verify a downloaded asset with either of these:"
+            echo
+            echo '```sh'
+            echo "sha256sum -c SHA256SUMS --ignore-missing"
+            echo "gh attestation verify hs --repo $REPO"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
