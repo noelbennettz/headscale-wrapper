@@ -19,6 +19,7 @@ mapping to the native `headscale` CLI and the parsing assumptions.
 - [Tags](#tags)
 - [Sample output](#sample-output)
 - [JSON output](#json-output)
+- [Dry runs](#dry-runs)
 - [Exit codes](#exit-codes)
 - [Environment variables](#environment-variables)
 - [FAQ](#faq)
@@ -45,7 +46,8 @@ mapping to the native `headscale` CLI and the parsing assumptions.
 - **Errors keep headscale's reason**: the `rpc error: ... desc = ` noise is
   dropped, so `hs ls rm` says `user not found` and not just `failed`
 - **Safe by default**: `hs rm` and `hs user rm` ask first and refuse to run in a
-  non-interactive shell (pipe, cron) unless `--force` is given
+  non-interactive shell (pipe, cron) unless `--force` is given; `--dry-run`
+  prints the `headscale` command instead of running it, without a prompt
 - **Stable output for pipelines**: columns aligned by `column` when it exists
   and by an internal `awk` fallback when it does not; trailing whitespace is
   stripped, timestamps are UTC, empty values are `-`
@@ -394,6 +396,43 @@ Write commands ignore `--json` — `hs key new` already prints only the key, and
 the destructive commands print one line per action. Exit codes do not change:
 `--json` never turns an error into an empty document, it fails the same way the
 table would.
+
+## Dry runs
+
+`--dry-run` on a write command does everything except the write: it resolves the
+node or user the same way, then prints the `headscale` command it would have run,
+prefixed `dry-run: `, instead of running it. Nothing changes and no confirmation
+prompt appears, so a destructive command can be inspected from a pipe, a cron
+job or a review script without `--force`:
+
+```console
+$ hs rm phone --dry-run
+dry-run: headscale nodes delete -i 2
+
+$ hs route add laptop 10.0.0.0/8 --dry-run
+dry-run: headscale nodes approve-routes -i 1 -r 10.0.0.0/8,192.168.1.0/24
+
+$ hs key new -u alice -e 24h -r --dry-run
+dry-run: headscale preauthkeys create -u 1 -e 24h --reusable
+```
+
+It covers `hs rm`, `hs rename`, `hs tag`, `hs expire` (both forms), `hs route
+add`, `hs route rm`, `hs key new`, `hs key rm`, `hs key expire`, `hs user new`
+and `hs user rm`, including the two-word `hs node <verb>` spelling. Some of
+those commands are computed rather than copied — `hs route add` prints the
+**merged** route list and `hs route rm` the remaining one — so the line shows
+what would actually be sent, not what you typed.
+
+Name resolution still reads: the ID in the printed line comes from a real
+`nodes list` / `users list` call. A name that does not resolve, or one that is
+ambiguous, fails with the same message and exit status as the real run — a dry
+run never prints a command for a node it could not identify. Read commands
+ignore `--dry-run` (they only read anyway), and `--dry-run` with `--json` is
+redundant: `--json` applies to reads, `--dry-run` to writes.
+
+The arguments are shell-quoted only where they have to be (`-r ''` for an empty
+route list, `tag:with\ space` for a tag with a space), so the line can be copied
+into a shell as is.
 
 ## Exit codes
 
