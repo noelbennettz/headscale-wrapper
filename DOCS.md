@@ -1,6 +1,8 @@
 # hs — reference
 
-> Applies to `v1.1.0` and the headscale v0.29 CLI. An older release keeps its
+> Applies to `v1.1.0` and the headscale v0.29 CLI; everything added after
+> `v1.1.0` (`--json`, `--dry-run`, the integration test, the release workflow)
+> is documented here and ships in the next release. An older release keeps its
 > documentation in the `README.md` and `DOCS.md` of that release's tag on
 > GitHub; this tree only documents the current one.
 
@@ -560,6 +562,8 @@ major version (see [Implementation notes](#implementation-notes)). CI runs the
 integration test against two pinned `v0.29` images (the first and the latest
 patch) and will gain a row when the next minor is released; there is no test
 against a newer minor yet, so treat any other version as unverified.
+[SECURITY.md](SECURITY.md) explains why a renamed field fails quietly and what
+else follows from running as root.
 
 ### Where does it store state?
 
@@ -662,4 +666,17 @@ server version.
 - Dependencies are checked up front (`jq`, then `headscale`), so a missing
   binary is one line on stderr and exit 1 instead of a half-finished command.
   `hs help` runs before that check and works without either.
+- **One file on purpose.** `hs` stays a single script instead of being split into
+  `lib/` helpers: `install.sh`, the release checksums and the build attestation
+  all treat `hs` as one file, `uninstall.sh` removes exactly that file, and the
+  script runs from a checkout, from `/usr/local/bin` and from a symlink without a
+  "where are my helpers" problem. The sections are separated by banner comments
+  and every command is exercised by `test/smoke.sh` and
+  `test/integration.sh`; splitting it would add a directory to the install and
+  release path for no behaviour change. Revisit only if a second entry point
+  appears.
+- Root privileges, the absence of privilege separation and the coupling to
+  headscale's JSON field names are security-relevant; see
+  [SECURITY.md](SECURITY.md) for what that means in practice and for the
+  reporting channel.
 

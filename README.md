@@ -1,8 +1,10 @@
 # hs — a name-based command line wrapper for the headscale CLI
 
-> Applies to `v1.1.0` and the headscale v0.29 CLI. Documentation for an older
-> release lives in the `README.md` and `DOCS.md` of that release's tag on
-> GitHub; this tree only documents the current one.
+> Applies to `v1.1.0` and the headscale v0.29 CLI. `--json`, `--dry-run`, the
+> integration test and the release workflow are on `main` after `v1.1.0` and
+> ship in the next release. Documentation for an older release lives in the
+> `README.md` and `DOCS.md` of that release's tag on GitHub; this tree only
+> documents the current one.
 
 [![Release](https://img.shields.io/badge/release-1.1.0-blue?logo=github)](https://github.com/noelbennettz/headscale-wrapper/releases)
 [![headscale](https://img.shields.io/badge/headscale-v0.29-blue)](https://github.com/juanfont/headscale)
@@ -60,12 +62,23 @@ first and refuse in a non-interactive shell unless `--force` is given. Add
 instead of the table, and `--dry-run` to a write command to print the
 `headscale` call it would make (`hs rm phone --dry-run`).
 
+## Security
+
+`hs` runs the local `headscale` CLI as root and adds no privileges of its own, so
+run it only on the headscale server and never as an unprivileged delegate: the
+same binary that lists nodes also deletes them. `HS_HEADSCALE_BIN` decides which
+binary is executed, so do not pass it through from an untrusted environment when
+`hs` runs as root. Parsing is tied to headscale v0.29's JSON field names; a new
+headscale minor is unverified until the CI matrix gains a row.
+[SECURITY.md](SECURITY.md) spells out the details and how to report a problem.
+
 ## Documentation
 
 | Document | Contents |
 | --- | --- |
 | [DOCS.md](DOCS.md) | Full command reference, sample output, exit codes, environment variables, FAQ, mapping to the native CLI, implementation notes |
 | [test/smoke.sh](test/smoke.sh) | Smoke test suite: a fake `headscale` and fixed fixtures, no real server needed |
+| [SECURITY.md](SECURITY.md) | Security policy and limitations: root-only, headscale version coupling, what is not validated |
 | [test/integration.sh](test/integration.sh) | Integration test: real headscale v0.29 in Docker plus a real node, `ls`/`show`/`route`/`--json`/`--dry-run` |
 | [.github/workflows/](.github/workflows/) | CI: `bash -n`, pinned `shellcheck` and `actionlint`, smoke and documentation tests; `release.yml` builds the tagged release with `SHA256SUMS` and a build-provenance attestation |
 
