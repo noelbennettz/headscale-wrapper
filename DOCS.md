@@ -111,8 +111,9 @@ ways out applies: run it with `sudo`, create the missing directory, or use
 `--prefix`. It warns when `jq` or `headscale` is missing but does not fail on
 it. Apart from `--prefix` creating `PREFIX/bin`, it creates no directory,
 inspects nothing that is already there and replaces the one destination file.
-To update, pull and install again — `install.sh` overwrites the script in place,
-so there is no state to migrate and nothing else on the machine changes:
+To update, pull and install again with the same arguments — `install.sh`
+overwrites the script in place, so there is no state to migrate and nothing else
+on the machine changes:
 
 ```sh
 git pull
@@ -320,9 +321,11 @@ fails with `key ID must be numeric: <value>`, and `0` is refused locally with
 `... must be 1 or greater: 0` rather than being sent to headscale. `hs rm`,
 `hs show`, `hs rename`, `hs tag` and `hs expire` take an ID *or* a name, and so
 do `hs route`, `hs route add` and `hs route rm`; `hs user rm` treats an all-digit
-argument as an ID and everything else as a name. In a node or user query an exact
-ID wins over a name, so a node whose `given_name` is a number is reachable only
-through a non-numeric spelling of its hostname.
+argument as an ID and everything else as a name. An all-digit node query is an
+ID when a node has that ID and otherwise falls through to the name match, so a
+node named `7` is shadowed only by a node whose ID is 7. `hs user rm` has no
+such fallback: an all-digit argument always means the user ID, so a user whose
+name is a number can only be removed by its real ID.
 
 ## Tags
 
@@ -420,7 +423,7 @@ What each one prints:
 | `hs route [node] --json` | An array of the nodes the table would show — always an array, even for one node or none |
 | `hs key ls --json` | Headscale's `preauthkeys list -o json`, byte for byte |
 | `hs user ls --json` | Headscale's `users list -o json`, byte for byte |
-| `hs version --json` | `{"version": "0.29.0", "raw": "<headscale version output>"}` |
+| `hs version --json` | `{"version": "v0.29.0", "raw": "<headscale version output>"}` |
 
 headscale encodes an empty list as `null`, not `[]`, because the repeated field
 is a nil slice on the wire. `hs` turns that into `[]` before printing, so
@@ -594,7 +597,8 @@ suite, the documentation path check and the Docker integration test. ShellCheck,
 shfmt and actionlint are downloaded from their pinned releases and verified
 against a SHA-256, so a changed download fails the job instead of running.
 `./test/smoke.sh` and `./test/integration.sh` are the two commands worth running
-locally; `--help` on either shows the environment variables.
+locally; each script lists the environment variables it reads in the comment at
+the top (`HS_IT_IMAGE`, `HS_IT_KEEP`, `HS_HEADSCALE_BIN`, ...).
 
 `./test/docs-paths.sh` checks that every repository path the README and DOCS.md
 mention really exists (a path that was promised but never written is a test

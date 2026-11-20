@@ -303,6 +303,16 @@ check_contains "dry-run: tag builds the real command" "nodes tag -i 1 -t tag:int
 out=$("$hs" show it-node)
 check_contains "dry-run: the tags were not changed" "tags        -" "$out"
 
+# users destroy asks its own question too, so this is the path where the
+# --force that hs adds after its own prompt has to be accepted by the real CLI.
+out=$("$hs" user new bob 2>&1)
+check_status "user new: a second user" 0 $?
+out=$("$hs" user rm bob --force 2>&1)
+check_status "user rm --force: exits 0" 0 $?
+check_contains "user rm --force: confirms the deletion" "deleted user bob" "$out"
+out=$("$hs" user ls --json)
+check_json "user rm --force: the user is gone" 'length == 1 and .[0].name == "alice"' "$out"
+
 # ---------------------------------------------------------------- error paths
 
 out=$("$hs" show nosuchnode 2>&1)
@@ -313,6 +323,14 @@ out=$("$hs" ls nosuchuser 2>&1)
 check_status "unknown user: exits 1" 1 $?
 check_contains "unknown user: keeps headscale's reason" "user not found" "$out"
 check_not_contains "unknown user: no gRPC noise" "desc = " "$out"
+
+# Deleting the last node takes the server back to the empty list, which is the
+# null case again, this time after a real write.
+out=$("$hs" rm it-node --force 2>&1)
+check_status "rm --force: exits 0" 0 $?
+check_contains "rm --force: confirms the deletion" "deleted it-node (ID 1)" "$out"
+out=$("$hs" ls --json)
+check_json "ls --json: empty again after the deletion" 'type == "array" and length == 0' "$out"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 ((fail == 0))

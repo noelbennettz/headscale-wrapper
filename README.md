@@ -17,8 +17,8 @@ laptop`, `hs expire phone`, `hs route add gw 10.0.0.0/8`. It parses the
 `--output json` of headscale and prints aligned, stable tables that are safe to
 pipe. Verified against headscale v0.29; other versions are untested because the
 parsing depends on field names. It has no daemon, no config file and no web UI,
-and keeps no state of its own — every command is one `headscale` call. Licence:
-MIT.
+and keeps no state of its own: every command reads what it needs from
+`headscale` and exits. Licence: MIT.
 
 ## Requirements
 
@@ -34,8 +34,9 @@ same server, and bash 5.x. `column` from util-linux is optional.
 ./uninstall.sh               # removes the script, nothing else
 ```
 
-Updating is the same command: `git pull && ./install.sh` overwrites the script
-in place, and there is no state to migrate. Each release also attaches `hs`,
+Updating is the same command with the same arguments you installed with:
+`git pull && ./install.sh` overwrites the script in place, and there is no state
+to migrate. Each release also attaches `hs`,
 `install.sh`, `uninstall.sh` and `SHA256SUMS` with a GitHub build-provenance
 attestation; [DOCS.md](DOCS.md#releases-and-how-to-verify-them) has the
 verification commands.

@@ -388,6 +388,14 @@ check_json "--json before the command" 'length == 3' "$out"
 out=$("$hs" ls alice --json)
 check_json "ls --json: user argument still reaches headscale" 'length == 3' "$out"
 
+# The fake ignores the filter, so assert on the argv instead of on the rows.
+reset_log
+"$hs" ls alice --json >/dev/null
+check_calls "ls --json: user filter is sent to headscale" "nodes list -u alice -o json"
+reset_log
+"$hs" ls bob >/dev/null
+check_calls "ls: user filter is sent to headscale" "nodes list -u bob -o json"
+
 out=$("$hs" show laptop --json)
 check_json "show --json: single node object" '.id == 1 and .given_name == "laptop"' "$out"
 check_not_contains "show --json: no label columns" "ID          " "$out"
@@ -633,6 +641,18 @@ out=$("$hs" user new a b 2>&1)
 check_status "user new: extra argument rejected" 1 $?
 check_contains "user new: extra argument usage" "usage: hs user new <name>" "$out"
 
+out=$("$hs" key ls extra 2>&1)
+check_status "key ls: extra argument rejected" 1 $?
+check_contains "key ls: extra argument usage" "usage: hs key ls" "$out"
+
+out=$("$hs" user ls extra 2>&1)
+check_status "user ls: extra argument rejected" 1 $?
+check_contains "user ls: extra argument usage" "usage: hs user ls" "$out"
+
+out=$("$hs" version extra 2>&1)
+check_status "version: extra argument rejected" 1 $?
+check_contains "version: extra argument usage" "usage: hs version" "$out"
+
 # ---------------------------------------------------------------- install / uninstall
 
 bindir=$tmp/bin
@@ -682,6 +702,40 @@ if [[ -L $tmp/dangling-hs ]]; then
 else
 	ok "uninstall: dangling symlink is gone"
 fi
+
+# --prefix takes a directory name: not the next option, not nothing, and not
+# together with a positional path.
+pfxdir=$tmp/pfx-cwd
+mkdir -p "$pfxdir"
+out=$(cd "$pfxdir" && HS_SKIP_ROOT_CHECK=1 "$here/../install.sh" --prefix --help 2>&1)
+check_status "install: an option is not a prefix" 1 $?
+check_contains "install: prefix value hint" "--prefix needs a directory" "$out"
+if [[ -e $pfxdir/--help ]]; then
+	ng "install: no directory named like an option" "" "created $pfxdir/--help"
+else
+	ok "install: no directory named like an option"
+fi
+
+out=$(cd "$pfxdir" && HS_SKIP_ROOT_CHECK=1 "$here/../install.sh" --prefix "" 2>&1)
+check_status "install: empty --prefix is an error" 1 $?
+check_contains "install: empty prefix hint" "--prefix needs a directory" "$out"
+
+out=$(HS_SKIP_ROOT_CHECK=1 "$here/../install.sh" --prefix "$tmp/pfx" "$tmp/bin/hs" 2>&1)
+check_status "install: --prefix and PATH are exclusive" 1 $?
+check_contains "install: exclusivity hint" "not both" "$out"
+if [[ -e $tmp/pfx ]]; then
+	ng "install: the exclusive form creates nothing" "" "created $tmp/pfx"
+else
+	ok "install: the exclusive form creates nothing"
+fi
+
+out=$(HS_SKIP_ROOT_CHECK=1 "$here/../uninstall.sh" --prefix "" 2>&1)
+check_status "uninstall: empty --prefix is an error" 1 $?
+check_contains "uninstall: empty prefix hint" "--prefix needs a directory" "$out"
+
+out=$(HS_SKIP_ROOT_CHECK=1 "$here/../uninstall.sh" --prefix --force 2>&1)
+check_status "uninstall: --force is not a prefix" 1 $?
+check_contains "uninstall: prefix value hint" "--prefix needs a directory" "$out"
 
 # --prefix is the same knob for both scripts: PREFIX/bin/hs, created on install.
 prefix=$tmp/prefix

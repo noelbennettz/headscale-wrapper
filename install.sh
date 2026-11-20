@@ -9,11 +9,13 @@ set -euo pipefail
 
 usage() {
 	cat <<'EOF'
-usage: ./install.sh [--prefix DIR] [PATH]
+usage: ./install.sh [--prefix DIR | PATH]
 
   (no argument)    install to /usr/local/bin/hs
   --prefix DIR     install to DIR/bin/hs, creating DIR/bin when it is missing
   PATH             install to exactly PATH (the directory has to exist)
+
+Give either --prefix or PATH, not both.
 
 Only the script itself is installed: headscale, jq and your shell profile are
 left alone.
@@ -36,9 +38,12 @@ while (($#)); do
 	case $1 in
 		-p | --prefix)
 			shift
-			(($#)) || die "--prefix needs a directory"
+			# A missing value used to be taken from the next word even when
+			# that word was another option, which made `--prefix --help`
+			# create a directory called `--help`.
+			[[ $# -gt 0 && -n $1 && $1 != -* ]] ||
+				die "--prefix needs a directory, e.g. --prefix \"\$HOME/.local\""
 			prefix=$1
-			dest=$prefix/bin/hs
 			;;
 		-h | --help)
 			usage
@@ -54,7 +59,14 @@ while (($#)); do
 	shift
 done
 
+if [[ -n $prefix && -n $dest ]]; then
+	die "give either --prefix DIR or an explicit PATH, not both"
+fi
+
 [[ -f $src ]] || die "$src not found"
+if [[ -n $prefix ]]; then
+	dest=$prefix/bin/hs
+fi
 [[ -n $dest ]] || dest=/usr/local/bin/hs
 
 # --prefix creates the bin directory; an explicit path does not, because a typo

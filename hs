@@ -631,7 +631,7 @@ cmd_key() {
 	(($#)) && shift
 	case $sub in
 		new | create | add) key_new "$@" ;;
-		ls | list) key_ls ;;
+		ls | list) key_ls "$@" ;;
 		rm | del | delete) key_action delete "$@" ;;
 		expire | revoke) key_action expire "$@" ;;
 		*) die "unknown key subcommand: $sub (available: new, ls, rm, expire)" ;;
@@ -684,6 +684,7 @@ key_new() {
 }
 
 key_ls() {
+	(($# == 0)) || die "usage: hs key ls"
 	local json
 	json=$("$HEADSCALE_BIN" preauthkeys list -o json) || die "failed to list keys"
 	json=$(as_list "$json")
@@ -737,7 +738,7 @@ cmd_user() {
 	local sub=${1:-ls}
 	(($#)) && shift
 	case $sub in
-		ls | list) user_ls ;;
+		ls | list) user_ls "$@" ;;
 		new | create | add) user_new "$@" ;;
 		rm | del | delete | destroy) user_rm "$@" ;;
 		*) die "unknown user subcommand: $sub (available: ls, new, rm)" ;;
@@ -745,6 +746,7 @@ cmd_user() {
 }
 
 user_ls() {
+	(($# == 0)) || die "usage: hs user ls"
 	local json
 	json=$("$HEADSCALE_BIN" users list -o json) || die "failed to list users"
 	json=$(as_list "$json")
@@ -823,6 +825,7 @@ user_rm() {
 # lines, because headscale's own version output is not JSON and inventing a
 # schema for commit/build time would break on the next release.
 cmd_version() {
+	(($# == 0)) || die "usage: hs version"
 	local raw first
 	raw=$("$HEADSCALE_BIN" version) || exit $?
 	if ((JSON)); then
@@ -873,7 +876,7 @@ main() {
 		route | routes) cmd_route "$@" ;;
 		key | keys | preauthkey | authkey) cmd_key "$@" ;;
 		user | users) cmd_user "$@" ;;
-		version) cmd_version ;;
+		version) cmd_version "$@" ;;
 		*) die "unknown command: $cmd (try hs help)" ;;
 	esac
 }

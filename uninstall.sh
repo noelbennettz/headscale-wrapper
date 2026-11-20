@@ -14,12 +14,14 @@ die() {
 
 usage() {
 	cat <<'EOF'
-usage: ./uninstall.sh [--prefix DIR] [PATH] [--force]
+usage: ./uninstall.sh [--prefix DIR | PATH] [--force]
 
   (no argument)    remove /usr/local/bin/hs
   --prefix DIR     remove DIR/bin/hs (the counterpart of install.sh --prefix)
   PATH             remove exactly PATH
   -f, --force      delete the file even when it does not look like hs
+
+Give either --prefix or PATH, not both.
 
 Environment:
   HS_SKIP_ROOT_CHECK=1   skip the write-access check (used by test/smoke.sh)
@@ -33,9 +35,11 @@ while (($#)); do
 	case $1 in
 		-p | --prefix)
 			shift
-			(($#)) || die "--prefix needs a directory"
+			# Same rule as install.sh: the value must be a real directory
+			# name, not the next option and not nothing.
+			[[ $# -gt 0 && -n $1 && $1 != -* ]] ||
+				die "--prefix needs a directory, e.g. --prefix \"\$HOME/.local\""
 			prefix=$1
-			dest=$prefix/bin/hs
 			;;
 		-f | --force) force=1 ;;
 		-h | --help)
@@ -51,6 +55,12 @@ while (($#)); do
 	esac
 	shift
 done
+if [[ -n $prefix && -n $dest ]]; then
+	die "give either --prefix DIR or an explicit PATH, not both"
+fi
+if [[ -n $prefix ]]; then
+	dest=$prefix/bin/hs
+fi
 dest=${dest:-/usr/local/bin/hs}
 
 # The marker that identifies a file as ours, so we never delete a stranger.
