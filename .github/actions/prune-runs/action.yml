@@ -28,12 +28,14 @@ runs:
           exit 0
         fi
 
-        # Only completed runs are candidates: a queued or in-progress run
-        # belongs to somebody and must not be cancelled as a side effect.
+        # The three newest runs are kept whatever their status; only older
+        # completed runs are candidates for deletion. Counting the current run
+        # among the three is what keeps the total at three after this run ends,
+        # and only deleting completed runs means a queued or in-progress run
+        # (this one included) is never cancelled as a side effect.
         stale=$(printf '%s\n' "$runs" |
-          awk 'NF == 3 && $3 == "completed"' |
           sort -rn -k1,1 |
-          awk -v keep="$keep" 'NR > keep { print $2 }')
+          awk -v keep="$keep" 'NR > keep && $3 == "completed" { print $2 }')
 
         deleted=0
         while read -r id; do
@@ -48,4 +50,4 @@ runs:
           fi
         done <<<"$stale"
 
-        echo "prune: kept the $keep newest completed runs of $workflow, deleted $deleted"
+        echo "prune: kept the $keep newest runs of $workflow, deleted $deleted"
