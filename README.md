@@ -1,12 +1,10 @@
 # hs — a name-based command line wrapper for the headscale CLI
 
-> Applies to `v1.1.0` and the headscale v0.29 CLI. `--json`, `--dry-run`, the
-> integration test and the release workflow are on `main` after `v1.1.0` and
-> ship in the next release. Documentation for an older release lives in the
-> `README.md` and `DOCS.md` of that release's tag on GitHub; this tree only
-> documents the current one.
+> Applies to `v0.9.0` and the headscale v0.29 CLI. Documentation for another
+> release lives in the `README.md` and `DOCS.md` of that release's tag on
+> GitHub; this tree only documents the current one.
 
-[![Release](https://img.shields.io/badge/release-1.1.0-blue?logo=github)](https://github.com/noelbennettz/headscale-wrapper/releases)
+[![Release](https://img.shields.io/badge/release-0.9.0-blue?logo=github)](https://github.com/noelbennettz/headscale-wrapper/releases)
 [![headscale](https://img.shields.io/badge/headscale-v0.29-blue)](https://github.com/juanfont/headscale)
 [![Bash](https://img.shields.io/badge/Bash-5.x-4EAA25?logo=gnubash&logoColor=white)](hs)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)

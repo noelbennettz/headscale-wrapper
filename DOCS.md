@@ -1,8 +1,6 @@
 # hs — reference
 
-> Applies to `v1.1.0` and the headscale v0.29 CLI; everything added after
-> `v1.1.0` (`--json`, `--dry-run`, the integration test, the release workflow)
-> is documented here and ships in the next release. An older release keeps its
+> Applies to `v0.9.0` and the headscale v0.29 CLI. Another release keeps its
 > documentation in the `README.md` and `DOCS.md` of that release's tag on
 > GitHub; this tree only documents the current one.
 
