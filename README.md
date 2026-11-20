@@ -62,6 +62,7 @@ instead of the table, and `--dry-run` to a write command to print the
 | --- | --- |
 | [DOCS.md](DOCS.md) | Full command reference, sample output, exit codes, environment variables, FAQ, mapping to the native CLI, implementation notes |
 | [test/smoke.sh](test/smoke.sh) | Smoke test suite: a fake `headscale` and fixed fixtures, no real server needed |
+| [test/integration.sh](test/integration.sh) | Integration test: real headscale v0.29 in Docker plus a real node, `ls`/`show`/`route`/`--json`/`--dry-run` |
 | [.github/workflows/](.github/workflows/) | CI: `bash -n`, pinned `shellcheck` and `actionlint`, smoke tests, documentation path check |
 
 ## Licence
