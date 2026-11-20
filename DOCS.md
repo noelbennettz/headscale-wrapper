@@ -516,7 +516,10 @@ work on that host.
 Only v0.29 is verified. The script parses headscale's `--output json` by field
 name (`given_name`, `approved_routes`, `ip_addresses`, ...), so a release that
 renames or reshapes those fields breaks it — re-check the JSON before bumping a
-major version (see [Implementation notes](#implementation-notes)).
+major version (see [Implementation notes](#implementation-notes)). CI runs the
+integration test against two pinned `v0.29` images (the first and the latest
+patch) and will gain a row when the next minor is released; there is no test
+against a newer minor yet, so treat any other version as unverified.
 
 ### Where does it store state?
 
@@ -549,6 +552,24 @@ The fake `headscale` appends every invocation's arguments to `$HS_LOG` and reads
 its JSON from `$FIXTURES`, so the suite can assert on the exact argv `hs` builds
 and on how it renders a given response; `test/smoke.sh` points both at its own
 temporary directory.
+
+[`test/integration.sh`](test/integration.sh) is the other half: it starts a real
+headscale in Docker, registers a real node with a Tailscale client in userspace
+mode, and runs `hs ls`, `hs show`, `hs route`, `hs key ls`, `hs user ls`,
+`hs version` and the `--json`/`--dry-run` forms against it. Nothing is installed
+on the host and no host port is used — `hs` reaches the server through a
+`docker exec` wrapper, the client joins the same Docker network — and the test
+is read-only apart from the writes the client needs to register:
+
+```sh
+./test/integration.sh                  # needs docker and jq
+```
+
+CI runs it against two pinned headscale images, `v0.29.0` and the latest
+`v0.29.x` (`HS_IT_IMAGE` overrides the image, `HS_IT_KEEP=1` leaves the
+containers and the work directory behind for debugging). A new headscale minor
+gets a matrix row when it is released; until then `v0.29` is the only tested
+server version.
 
 ## Mapping to the native CLI
 

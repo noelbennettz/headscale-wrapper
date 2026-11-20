@@ -30,7 +30,7 @@ jobs:
         with:
           persist-credentials: false
       - name: bash -n
-        run: bash -n hs install.sh uninstall.sh test/smoke.sh test/docs-paths.sh
+        run: bash -n hs install.sh uninstall.sh test/smoke.sh test/docs-paths.sh test/integration.sh
 
   shellcheck:
     name: shellcheck
@@ -53,7 +53,7 @@ jobs:
       - name: shellcheck --version
         run: shellcheck --version
       - name: shellcheck
-        run: shellcheck hs install.sh uninstall.sh test/smoke.sh test/docs-paths.sh test/fakebin/headscale
+        run: shellcheck hs install.sh uninstall.sh test/smoke.sh test/docs-paths.sh test/integration.sh test/fakebin/headscale
 
   actionlint:
     name: actionlint
@@ -99,3 +99,33 @@ jobs:
           persist-credentials: false
       - name: ./test/docs-paths.sh
         run: ./test/docs-paths.sh
+
+  integration:
+    # A real headscale in Docker: hs talks to it through `docker exec`, and a
+    # Tailscale client in userspace mode registers a node so that ls/show/route
+    # have something real to read. Image digests, because the point is to test
+    # against a fixed server build; the tag is in the job name.
+    # headscale has no v0.30 yet: the matrix covers the first and the latest
+    # patch of the supported v0.29 minor and gains a row when a new minor ships.
+    name: integration headscale ${{ matrix.headscale }}
+    needs: syntax
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - headscale: v0.29.0
+            image: ghcr.io/juanfont/headscale@sha256:5d464c7ba8f5b2c1472f926fae4cd67f136d66ec108c0b4ad1891856ac6da915
+          - headscale: v0.29.7
+            image: ghcr.io/juanfont/headscale@sha256:11f81665e842809db9fe3006a38c56a66e968baa5abd4bac498e86445572b970
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: docker version
+        run: docker version
+      - name: ./test/integration.sh
+        env:
+          HS_IT_IMAGE: ${{ matrix.image }}
+        run: ./test/integration.sh
