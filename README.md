@@ -79,7 +79,7 @@ headscale minor is unverified until the CI matrix gains a row.
 | [test/smoke.sh](test/smoke.sh) | Smoke test suite: a fake `headscale` and fixed fixtures, no real server needed |
 | [SECURITY.md](SECURITY.md) | Security policy and limitations: root-only, headscale version coupling, what is not validated |
 | [test/integration.sh](test/integration.sh) | Integration test: real headscale v0.29 in Docker plus a real node, `ls`/`show`/`route`/`--json`/`--dry-run` |
-| [.github/workflows/](.github/workflows/) | CI: `bash -n`, pinned `shellcheck` and `actionlint`, smoke and documentation tests; `release.yml` builds the tagged release with `SHA256SUMS` and a build-provenance attestation |
+| [.github/workflows/](.github/workflows/) | CI: `bash -n`, pinned `shellcheck` and `actionlint`, smoke and documentation tests; `release.yml` builds the tagged release with `SHA256SUMS` and a build-provenance attestation; both workflows keep only their three newest runs (`.github/actions/prune-runs`) |
 
 ## Licence
 
