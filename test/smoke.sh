@@ -423,6 +423,80 @@ check_json "version --json: raw text kept" '.raw | startswith("headscale version
 out=$("$hs" help)
 check_contains "help: documents --json" "--json" "$out"
 
+# ---------------------------------------------------------------- dry-run
+
+# A dry run must not care about the TTY: the suite runs without one, and the
+# whole point is inspecting a destructive command from a script or a cron job.
+reset_log
+out=$("$hs" rm phone --dry-run)
+check_status "dry-run: rm works without --force or a TTY" 0 $?
+check_contains "dry-run: rm command printed" "dry-run: headscale nodes delete -i 2" "$out"
+check_not_contains "dry-run: rm reports no deletion" "deleted" "$out"
+check_no_calls "dry-run: rm did not call headscale" "nodes delete"
+
+reset_log
+out=$("$hs" rm phone laptop --force --dry-run)
+check_contains "dry-run: --force appears in the printed command" "nodes delete -i 2 --force" "$out"
+check_contains "dry-run: one line per node" "nodes delete -i 1 --force" "$out"
+check_no_calls "dry-run: neither node was deleted" "nodes delete"
+
+reset_log
+out=$("$hs" rename phone pixel --dry-run)
+check_contains "dry-run: rename" "dry-run: headscale nodes rename -i 2 pixel" "$out"
+check_no_calls "dry-run: rename did not run" "nodes rename"
+
+reset_log
+out=$("$hs" tag laptop tag:a tag:b --dry-run)
+check_contains "dry-run: tag" "nodes tag -i 1 -t tag:a -t tag:b" "$out"
+check_no_calls "dry-run: tag did not run" "nodes tag"
+
+reset_log
+out=$("$hs" expire laptop --at 2026-02-01T00:00:00Z --dry-run)
+check_contains "dry-run: expire --at" "nodes expire -i 1 -e 2026-02-01T00:00:00Z" "$out"
+out=$("$hs" expire laptop --disable --dry-run)
+check_contains "dry-run: expire --disable" "nodes expire -i 1 --disable" "$out"
+check_no_calls "dry-run: expire did not run" "nodes expire"
+
+reset_log
+out=$("$hs" route add laptop 10.0.0.0/8 --dry-run)
+check_contains "dry-run: route add prints the merged list" \
+	"nodes approve-routes -i 1 -r 10.0.0.0/8,192.168.1.0/24" "$out"
+out=$("$hs" route rm laptop 192.168.1.0/24 --dry-run)
+check_contains "dry-run: route rm prints the remaining list" "nodes approve-routes -i 1 -r ''" "$out"
+out=$("$hs" route rm phone --dry-run)
+check_contains "dry-run: route rm without a CIDR withdraws all" "nodes approve-routes -i 2 -r ''" "$out"
+check_no_calls "dry-run: routes were not changed" "approve-routes"
+
+reset_log
+out=$("$hs" key new -u alice -e 24h -r -t tag:vpn --dry-run)
+check_contains "dry-run: key new" "preauthkeys create -u 1 -e 24h --reusable --tags tag:vpn" "$out"
+out=$("$hs" key rm 1 2 --dry-run)
+check_contains "dry-run: key rm prints every ID" "preauthkeys delete -i 2" "$out"
+out=$("$hs" key expire 2 --dry-run)
+check_contains "dry-run: key expire" "preauthkeys expire -i 2" "$out"
+check_no_calls "dry-run: keys untouched" "preauthkeys create" "preauthkeys delete"
+
+reset_log
+out=$("$hs" user new carol --dry-run)
+check_contains "dry-run: user new" "dry-run: headscale users create carol" "$out"
+out=$("$hs" user rm bob --dry-run)
+check_status "dry-run: user rm works without --force" 0 $?
+check_contains "dry-run: user rm" "users destroy --name bob" "$out"
+check_no_calls "dry-run: users untouched" "users create" "users destroy"
+
+reset_log
+out=$("$hs" rm nosuchnode --dry-run 2>&1)
+check_status "dry-run: an unknown node still fails" 1 $?
+check_contains "dry-run: unknown node message" "no such node: nosuchnode" "$out"
+
+# Read commands ignore the flag: they only read, and the output is unchanged.
+out=$("$hs" ls --dry-run)
+check_contains "dry-run: read commands still print the table" "laptop" "$out"
+check_not_contains "dry-run: read commands print no dry-run line" "dry-run:" "$out"
+
+out=$("$hs" help)
+check_contains "help: documents --dry-run" "--dry-run" "$out"
+
 # ---------------------------------------------------------------- deps and errors
 
 out=$("$hs" version)

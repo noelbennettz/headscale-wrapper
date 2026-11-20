@@ -53,7 +53,8 @@ alice -e 24h` prints a preauthkey and nothing else, and `hs user ls`,
 first and refuse in a non-interactive shell unless `--force` is given. Add
 `--json` to a read command (`hs ls --json`, `hs show laptop --json`, `hs route
 --json`, `hs key ls`, `hs user ls`, `hs version`) to get headscale's JSON
-instead of the table.
+instead of the table, and `--dry-run` to a write command to print the
+`headscale` call it would make (`hs rm phone --dry-run`).
 
 ## Documentation
 

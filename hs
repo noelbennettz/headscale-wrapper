@@ -15,6 +15,11 @@ HEADSCALE_BIN=${HS_HEADSCALE_BIN:-headscale}
 # passed through instead of being formatted into a table.
 JSON=0
 
+# --dry-run resolves names as usual but prints the headscale command it would
+# have run instead of running it, so the destructive commands can be inspected
+# (and scripted) without prompts.
+DRY_RUN=0
+
 die() { printf '%s: %s\n' "$PROG" "$*" >&2; exit 1; }
 
 usage() {
@@ -59,6 +64,10 @@ Other
   hs <read command> --json        Print the headscale JSON instead of a table
                                   (ls, show, route, key ls, user ls, version);
                                   --json may also come first: hs --json ls
+
+  hs <write command> --dry-run    Resolve the names and print the headscale
+                                  command instead of running it; no prompt, no
+                                  confirmation, nothing changes
 
 <node> accepts an ID or a name (given_name, then hostname); names also match
 on a unique prefix. IDs are numbers starting at 1.
@@ -255,6 +264,26 @@ confirm() {
 	[[ $answer == [yY]* ]]
 }
 
+# print_dry_run <args...>: the headscale invocation --dry-run would have made,
+# shell-quoted on one line so it can be copied into a shell.
+quote_arg() {
+	local a=$1
+	if [[ $a =~ ^[A-Za-z0-9_./:@%+,=-]+$ ]]; then
+		printf '%s' "$a"
+	else
+		printf '%q' "$a"
+	fi
+}
+
+print_dry_run() {
+	local out="" a
+	out=$(quote_arg "$HEADSCALE_BIN")
+	for a in "$@"; do
+		out+=" $(quote_arg "$a")"
+	done
+	printf 'dry-run: %s\n' "$out"
+}
+
 # validate_rfc3339: reject the mistakes users actually make (date only, no
 # timezone, epoch seconds, a duration instead of a timestamp) locally, so the
 # hint is immediate instead of a headscale "parsing expiry time" error.
@@ -358,14 +387,18 @@ cmd_rm() {
 	for t in "${targets[@]}"; do
 		id=$(resolve_node "$t")
 		name=$(node_display_name "$id")
+		local -a args=(nodes delete -i "$id")
+		((force)) && args+=(--force)
+		if ((DRY_RUN)); then
+			print_dry_run "${args[@]}"
+			continue
+		fi
 		if ((force == 0)); then
 			confirm "Delete node $name (ID $id)?" || {
 				printf '%s: cancelled\n' "$PROG"
 				return 0
 			}
 		fi
-		local -a args=(nodes delete -i "$id")
-		((force)) && args+=(--force)
 		"$HEADSCALE_BIN" "${args[@]}" >/dev/null
 		printf 'deleted %s (ID %s)\n' "$name" "$id"
 	done
@@ -376,6 +409,10 @@ cmd_rename() {
 	local id
 	ensure_nodes
 	id=$(resolve_node "$1")
+	if ((DRY_RUN)); then
+		print_dry_run nodes rename -i "$id" "$2"
+		return 0
+	fi
 	"$HEADSCALE_BIN" nodes rename -i "$id" "$2" >/dev/null
 	printf 'renamed to %s\n' "$2"
 }
@@ -391,6 +428,10 @@ cmd_tag() {
 	local -a args=(nodes tag -i "$id")
 	local t
 	for t in "$@"; do args+=(-t "$t"); done
+	if ((DRY_RUN)); then
+		print_dry_run "${args[@]}"
+		return 0
+	fi
 	"$HEADSCALE_BIN" "${args[@]}" >/dev/null
 	printf 'tags set to: %s\n' "$*"
 }
@@ -424,6 +465,10 @@ cmd_expire() {
 	id=$(resolve_node "$target")
 
 	if ((disable)); then
+		if ((DRY_RUN)); then
+			print_dry_run nodes expire -i "$id" --disable
+			return 0
+		fi
 		"$HEADSCALE_BIN" nodes expire -i "$id" --disable >/dev/null
 		printf 'expiry disabled (%s)\n' "$target"
 		return 0
@@ -431,6 +476,10 @@ cmd_expire() {
 
 	local -a args=(nodes expire -i "$id")
 	((at_set)) && args+=(-e "$at")
+	if ((DRY_RUN)); then
+		print_dry_run "${args[@]}"
+		return 0
+	fi
 	"$HEADSCALE_BIN" "${args[@]}" >/dev/null
 	if ((at_set)); then
 		printf 'expiry set to %s (%s)\n' "$at" "$target"
@@ -507,6 +556,10 @@ route_add() {
 		| ($add | split("\n") | map(select(. != ""))) as $a
 		| (($c + $a) | unique | join(","))')
 
+	if ((DRY_RUN)); then
+		print_dry_run nodes approve-routes -i "$id" -r "$merged"
+		return 0
+	fi
 	"$HEADSCALE_BIN" nodes approve-routes -i "$id" -r "$merged" >/dev/null
 	printf 'approved routes: %s\n' "$merged"
 }
@@ -519,6 +572,10 @@ route_rm() {
 	shift
 
 	if (($# == 0)); then
+		if ((DRY_RUN)); then
+			print_dry_run nodes approve-routes -i "$id" -r ""
+			return 0
+		fi
 		"$HEADSCALE_BIN" nodes approve-routes -i "$id" -r "" >/dev/null
 		printf 'all approved routes removed\n'
 		return 0
@@ -533,6 +590,10 @@ route_rm() {
 		| ($del | split("\n") | map(select(. != ""))) as $d
 		| (($c - $d) | join(","))')
 
+	if ((DRY_RUN)); then
+		print_dry_run nodes approve-routes -i "$id" -r "$remaining"
+		return 0
+	fi
 	"$HEADSCALE_BIN" nodes approve-routes -i "$id" -r "$remaining" >/dev/null
 	printf 'approved routes: %s\n' "${remaining:-(none)}"
 }
@@ -589,6 +650,10 @@ key_new() {
 	for t in "${tags[@]}"; do args+=(--tags "$t"); done
 
 	# Only the key itself goes to stdout so it can be piped.
+	if ((DRY_RUN)); then
+		print_dry_run "${args[@]}"
+		return 0
+	fi
 	"$HEADSCALE_BIN" "${args[@]}"
 }
 
@@ -624,6 +689,10 @@ key_action() {
 	for id in "$@"; do
 		[[ $id =~ ^[0-9]+$ ]] || die "key ID must be numeric: $id"
 		((id > 0)) || die "key ID must be 1 or greater: $id"
+		if ((DRY_RUN)); then
+			print_dry_run preauthkeys "$action" -i "$id"
+			continue
+		fi
 		"$HEADSCALE_BIN" preauthkeys "$action" -i "$id" >/dev/null
 		printf 'key %s: %s\n' "$id" "$label"
 	done
@@ -664,6 +733,10 @@ user_ls() {
 
 user_new() {
 	(($# >= 1)) || die "usage: hs user new <name>"
+	if ((DRY_RUN)); then
+		print_dry_run users create "$1"
+		return 0
+	fi
 	"$HEADSCALE_BIN" users create "$1" >/dev/null
 	printf 'created user %s\n' "$1"
 }
@@ -683,12 +756,6 @@ user_rm() {
 
 	local t
 	for t in "${targets[@]}"; do
-		if ((force == 0)); then
-			confirm "Delete user $t and all of its preauthkeys?" || {
-				printf '%s: cancelled\n' "$PROG"
-				return 0
-			}
-		fi
 		local -a args=(users destroy)
 		if [[ $t =~ ^[0-9]+$ ]]; then
 			((t > 0)) || die "user ID must be 1 or greater: $t"
@@ -697,6 +764,16 @@ user_rm() {
 			args+=(--name "$t")
 		fi
 		((force)) && args+=(--force)
+		if ((DRY_RUN)); then
+			print_dry_run "${args[@]}"
+			continue
+		fi
+		if ((force == 0)); then
+			confirm "Delete user $t and all of its preauthkeys?" || {
+				printf '%s: cancelled\n' "$PROG"
+				return 0
+			}
+		fi
 		"$HEADSCALE_BIN" "${args[@]}" >/dev/null
 		printf 'deleted user %s\n' "$t"
 	done
@@ -729,6 +806,7 @@ main() {
 	while (($#)); do
 		case $1 in
 		--json) JSON=1 ;;
+		--dry-run) DRY_RUN=1 ;;
 		*) passed+=("$1") ;;
 		esac
 		shift
