@@ -32,7 +32,10 @@ same server, and bash 5.x. `column` from util-linux is optional.
 ```
 
 Updating is the same command: `git pull && ./install.sh` overwrites the script
-in place, and there is no state to migrate.
+in place, and there is no state to migrate. Each release also attaches `hs`,
+`install.sh`, `uninstall.sh` and `SHA256SUMS` with a GitHub build-provenance
+attestation; [DOCS.md](DOCS.md#releases-and-how-to-verify-them) has the
+verification commands.
 
 ## Usage
 
@@ -62,7 +65,7 @@ instead of the table, and `--dry-run` to a write command to print the
 | --- | --- |
 | [DOCS.md](DOCS.md) | Full command reference, sample output, exit codes, environment variables, FAQ, mapping to the native CLI, implementation notes |
 | [test/smoke.sh](test/smoke.sh) | Smoke test suite: a fake `headscale` and fixed fixtures, no real server needed |
-| [.github/workflows/](.github/workflows/) | CI: `bash -n`, pinned `shellcheck` and `actionlint`, smoke tests, documentation path check |
+| [.github/workflows/](.github/workflows/) | CI: `bash -n`, pinned `shellcheck` and `actionlint`, smoke and documentation tests; `release.yml` builds the tagged release with `SHA256SUMS` and a build-provenance attestation |
 
 ## Licence
 

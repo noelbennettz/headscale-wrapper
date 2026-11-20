@@ -123,6 +123,31 @@ removal it notes any other `hs` still on `PATH`.
 Tested on Debian/Ubuntu with bash 5.x against headscale v0.29; nothing in the
 script is Linux-specific beyond the usual coreutils.
 
+## Releases and how to verify them
+
+Pushing an annotated `vMAJOR.MINOR.PATCH` tag is the only release step, and it is
+manual: the workflow runs on the tag, it never creates one.
+
+`.github/workflows/release.yml` re-runs `bash -n`, ShellCheck, actionlint and the
+smoke and documentation tests on the tagged tree, writes `SHA256SUMS` for `hs`,
+`install.sh` and `uninstall.sh`, attests all four files with GitHub build
+provenance (`actions/attest-build-provenance`), and attaches them to the GitHub
+release for that tag (`gh release create --verify-tag`; re-running the workflow
+for the same tag replaces the assets instead of failing). Nothing is signed with
+a PGP or cosign key — the attestation is the signature: it is issued by GitHub
+for this repository, this workflow and this tag.
+
+Verify a download:
+
+```sh
+sha256sum -c SHA256SUMS --ignore-missing
+gh attestation verify hs --repo noelbennettz/headscale-wrapper
+```
+
+The checksums catch a truncated or re-uploaded file; the attestation proves the
+file came out of this repository's release workflow for that tag. Both are
+optional — `hs` is a single bash script you can read before running.
+
 ## Command reference
 
 | Command | Description |
