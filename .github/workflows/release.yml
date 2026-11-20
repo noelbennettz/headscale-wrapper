@@ -14,6 +14,8 @@ on:
 
 permissions:
   contents: read
+  # The prune steps delete old runs of this workflow.
+  actions: write
 
 env:
   SHELLCHECK_VERSION: v0.10.0
@@ -30,6 +32,8 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.inputs.tag || github.ref }}
+      - name: prune old runs
+        uses: ./.github/actions/prune-runs
       - name: Install pinned shellcheck
         run: |
           set -euo pipefail
@@ -76,6 +80,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      actions: write
       id-token: write
       attestations: write
     steps:
@@ -125,3 +130,6 @@ jobs:
             echo "gh attestation verify hs --repo $REPO"
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
+      - name: prune old runs
+        if: always()
+        uses: ./.github/actions/prune-runs

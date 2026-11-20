@@ -594,6 +594,12 @@ CI runs, on every pull request and on pushes to `main` plus a weekly schedule:
 suite, the documentation path check and the Docker integration test. ShellCheck,
 shfmt and actionlint are downloaded from their pinned releases and verified
 against a SHA-256, so a changed download fails the job instead of running.
+Both workflows also keep their own history short: a `prune old runs` step calls
+[`.github/actions/prune-runs`](.github/actions/prune-runs/action.yml) at the
+start and, with `if: always()`, at the end, and it deletes every run of that
+same workflow older than the three newest. It authenticates with the workflow
+token (`actions: write`), needs no extra secret, and is best-effort: a fork pull
+request gets a read-only token, so there it warns instead of failing the job.
 `./test/smoke.sh` and `./test/integration.sh` are the two commands worth running
 locally; each script lists the environment variables it reads in the comment at
 the top (`HS_IT_IMAGE`, `HS_IT_KEEP`, `HS_HEADSCALE_BIN`, ...).

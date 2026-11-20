@@ -1,0 +1,51 @@
+name: prune old runs
+description: >-
+  Keep the three newest runs of the workflow that calls this action and delete
+  the older ones. It uses the workflow token, so it needs no extra secret, and
+  it is best-effort: housekeeping must never fail the job.
+
+runs:
+  using: composite
+  steps:
+    - name: keep the three newest runs
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -uo pipefail
+        keep=3
+        repo=$GITHUB_REPOSITORY
+        workflow=$(basename "${GITHUB_WORKFLOW_REF%%@*}")
+
+        # Listing is the only step worth reporting loudly, but even that is
+        # housekeeping: a pull request from a fork gets a read-only token, and
+        # a red build over old logs would be worse than a warning.
+        if ! runs=$(gh api --paginate \
+          -H 'Accept: application/vnd.github+json' \
+          "repos/$repo/actions/workflows/$workflow/runs?per_page=100" \
+          --jq '.workflow_runs[] | "\(.run_number) \(.id) \(.status)"' 2>/dev/null); then
+          echo "::warning::prune: could not list the runs of $workflow"
+          exit 0
+        fi
+
+        # Only completed runs are candidates: a queued or in-progress run
+        # belongs to somebody and must not be cancelled as a side effect.
+        stale=$(printf '%s\n' "$runs" |
+          awk 'NF == 3 && $3 == "completed"' |
+          sort -rn -k1,1 |
+          awk -v keep="$keep" 'NR > keep { print $2 }')
+
+        deleted=0
+        while read -r id; do
+          [[ -n $id ]] || continue
+          if [[ $id == "${GITHUB_RUN_ID:-}" ]]; then
+            continue
+          fi
+          if gh api -X DELETE "repos/$repo/actions/runs/$id" >/dev/null 2>&1; then
+            deleted=$((deleted + 1))
+          else
+            echo "::warning::prune: could not delete run $id"
+          fi
+        done <<<"$stale"
+
+        echo "prune: kept the $keep newest completed runs of $workflow, deleted $deleted"

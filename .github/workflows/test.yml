@@ -12,6 +12,8 @@ on:
 
 permissions:
   contents: read
+  # The prune step deletes old runs of this workflow.
+  actions: write
 
 concurrency:
   group: test-${{ github.workflow }}-${{ github.ref }}
@@ -35,6 +37,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: prune old runs
+        uses: ./.github/actions/prune-runs
       - name: bash -n
         run: bash -n hs install.sh uninstall.sh test/smoke.sh test/docs-paths.sh test/integration.sh
 
@@ -165,3 +169,6 @@ jobs:
         env:
           HS_IT_IMAGE: ${{ matrix.image }}
         run: ./test/integration.sh
+      - name: prune old runs
+        if: always()
+        uses: ./.github/actions/prune-runs
