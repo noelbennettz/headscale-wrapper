@@ -101,9 +101,9 @@ export PATH="$HOME/.local/bin:$PATH"      # if it is not in PATH already
 
 Check the install: `command -v hs` prints the path it went to, `hs help` prints
 the command list without touching `headscale`, and `hs ls` prints the node table
-(or `no nodes` on a fresh server). A `command not found` after installing to a
-custom path means that directory is not in `PATH`; the installer says so
-(`note: <dir> is not in PATH`) and warns when a different `hs` would win.
+(the header with no rows on a fresh server). A `command not found` after
+installing to a custom path means that directory is not in `PATH`; the installer
+says so (`note: <dir> is not in PATH`) and warns when a different `hs` would win.
 
 The installer checks that the destination directory exists and is writable by
 you before touching anything, and its failure messages say which of the three
@@ -422,6 +422,12 @@ What each one prints:
 | `hs user ls --json` | Headscale's `users list -o json`, byte for byte |
 | `hs version --json` | `{"version": "0.29.0", "raw": "<headscale version output>"}` |
 
+headscale encodes an empty list as `null`, not `[]`, because the repeated field
+is a nil slice on the wire. `hs` turns that into `[]` before printing, so
+`hs ls --json` on a server without nodes (or `hs key ls`/`hs user ls` without
+keys or users) is an empty array and not `null`; everything else is passed
+through unchanged.
+
 `hs ls` and `hs route` are the only two that filter, and they filter the same
 way with and without `--json`. The pass-through commands do not re-encode the
 JSON, so the field names, ordering and key masking are exactly what headscale
@@ -659,7 +665,12 @@ server version.
   equivalent to dual-stack ones. `IP` addresses and CIDRs are opaque strings
   passed through from headscale, not parsed or family-checked locally.
 - Destructive commands refuse to run in a non-interactive shell (pipe, cron)
-  unless `--force` is given.
+  unless `--force` is given. Once `hs` has asked, headscale's own confirmation
+  (`nodes delete` and `users destroy` have one) is skipped with `--force`, so the
+  question is asked once and "yes" is never overwritten by a second prompt.
+- headscale marshals an empty repeated field as `null`; `hs` normalises that to
+  `[]` once, after every `-o json` read, so filters and name lookups keep working
+  on a fresh server.
 - Reads and writes both go through the same `headscale` binary; `hs` keeps no
   state of its own. A command that needs the node list runs `nodes list -o json`
   once and keeps the JSON in a shell variable for the rest of that invocation.

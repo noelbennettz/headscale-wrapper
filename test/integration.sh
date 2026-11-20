@@ -182,6 +182,20 @@ check_contains "user ls: lists the real user" "alice" "$out"
 out=$("$hs" user ls --json)
 check_json "user ls --json: real JSON" 'length == 1 and .[0].name == "alice"' "$out"
 
+# No nodes yet: headscale serialises the empty list as `null`, which hs has to
+# turn into a header (and [] with --json) instead of handing it to jq.
+out=$("$hs" ls 2>&1)
+check_status "ls: empty server exits 0" 0 $?
+check_contains "ls: empty server keeps the header" "NAME" "$out"
+check_not_contains "ls: empty server has no jq error" "jq:" "$out"
+
+out=$("$hs" ls --json)
+check_json "ls --json: empty server is an array" 'type == "array" and length == 0' "$out"
+
+out=$("$hs" show nosuchnode 2>&1)
+check_status "empty server: unknown node exits 1" 1 $?
+check_contains "empty server: unknown node message" "no such node: nosuchnode" "$out"
+
 key=$("$hs" key new -u alice -e 1h)
 check_status "key new: exits 0" 0 $?
 check_contains "key new: prints only a preauthkey" "hskey-auth-" "$key"

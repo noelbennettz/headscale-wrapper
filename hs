@@ -36,7 +36,8 @@ Nodes
   hs show <node>                  Show details for a single node
   hs rm <node...> [--force]       Delete nodes (asks for confirmation)
   hs rename <node> <new-name>     Rename a node
-  hs tag <node> <tag...>          Overwrite tags (each tag must be tag:lowercase)
+  hs tag <node> <tag...>          Overwrite tags (headscale checks the format:
+                                  tag:lowercase)
   hs expire <node> [--at TIME]    Log out a node / set its expiry; --at takes
                                   an RFC3339 timestamp (2026-02-01T00:00:00Z)
   hs expire <node> --disable      Disable expiry (node never expires)
@@ -117,6 +118,18 @@ render_table() {
 	fi
 }
 
+# as_list: headscale marshals an empty repeated field as `null`, not `[]`, so
+# a server with no nodes, keys or users answers `null`. Every consumer here
+# iterates with jq (.[], map), which fails on null, so normalise it once.
+as_list() {
+	local json=$1
+	if [[ $json == null || -z $json ]]; then
+		printf '[]\n'
+	else
+		printf '%s\n' "$json"
+	fi
+}
+
 # Shared jq prelude: render a protobuf timestamp ({seconds,nanos}) as UTC and
 # a list as "a, b" ("-" when it is missing or empty).
 # shellcheck disable=SC2016  # the jq program is single-quoted on purpose
@@ -169,6 +182,7 @@ load_nodes() {
 		die "failed to list nodes: ${msg:-unknown error}"
 	fi
 	rm -f "$err"
+	NODES_JSON=$(as_list "$NODES_JSON")
 }
 
 # The node cache has to be filled in the parent shell: helpers such as
@@ -228,6 +242,7 @@ resolve_user() {
 	local q=${1:-${HS_DEFAULT_USER:-}}
 	local users
 	users=$("$HEADSCALE_BIN" users list -o json) || die "failed to list users"
+	users=$(as_list "$users")
 
 	if [[ -z $q ]]; then
 		local count
@@ -254,6 +269,7 @@ resolve_user() {
 	case $out in
 		NOTFOUND) die "no such user: $q" ;;
 		AMBIG:*) die "ambiguous user: $q (${out#AMBIG:})" ;;
+		"") die "failed to resolve user: $q" ;;
 		*) printf '%s\n' "$out" ;;
 	esac
 }
@@ -311,8 +327,8 @@ cmd_node() {
 	local sub=${1:-ls}
 	(($#)) && shift
 	case $sub in
-		ls | list) cmd_ls "${1:-}" ;;
-		show | info | get) cmd_show "${1:-}" ;;
+		ls | list) cmd_ls "$@" ;;
+		show | info | get) cmd_show "$@" ;;
 		rm | del | delete | remove) cmd_rm "$@" ;;
 		rename | mv | name) cmd_rename "$@" ;;
 		tag | tags) cmd_tag "$@" ;;
@@ -326,6 +342,7 @@ cmd_node() {
 }
 
 cmd_ls() {
+	(($# <= 1)) || die "usage: hs ls [user]"
 	load_nodes "${1:-}"
 	if ((JSON)); then
 		printf '%s\n' "$NODES_JSON"
@@ -348,6 +365,7 @@ cmd_ls() {
 }
 
 cmd_show() {
+	(($# <= 1)) || die "usage: hs show <node>"
 	local id name
 	ensure_nodes
 	id=$(resolve_node "${1:-}")
@@ -401,6 +419,11 @@ cmd_rm() {
 				printf '%s: cancelled\n' "$PROG"
 				return 0
 			}
+			# headscale asks its own question too (nodes delete has no way to
+			# skip it except --force), and hs has just asked; without this the
+			# user is prompted twice and a "no" at the second prompt still
+			# makes hs print "deleted".
+			args+=(--force)
 		fi
 		"$HEADSCALE_BIN" "${args[@]}" >/dev/null
 		printf 'deleted %s (ID %s)\n' "$name" "$id"
@@ -408,7 +431,7 @@ cmd_rm() {
 }
 
 cmd_rename() {
-	(($# >= 2)) || die "usage: hs rename <node> <new-name>"
+	(($# == 2)) || die "usage: hs rename <node> <new-name>"
 	local id
 	ensure_nodes
 	id=$(resolve_node "$1")
@@ -663,6 +686,7 @@ key_new() {
 key_ls() {
 	local json
 	json=$("$HEADSCALE_BIN" preauthkeys list -o json) || die "failed to list keys"
+	json=$(as_list "$json")
 	if ((JSON)); then
 		printf '%s\n' "$json"
 		return 0
@@ -684,10 +708,16 @@ key_ls() {
 }
 
 key_action() {
-	local action=$1 label
+	local action=$1 label word
 	shift
-	(($#)) || die "usage: hs key <$action> <id...>"
-	if [[ $action == delete ]]; then label=deleted; else label=expired; fi
+	if [[ $action == delete ]]; then
+		label=deleted
+		word='rm'
+	else
+		label=expired
+		word='expire'
+	fi
+	(($#)) || die "usage: hs key $word <id...>"
 	local id
 	for id in "$@"; do
 		[[ $id =~ ^[0-9]+$ ]] || die "key ID must be numeric: $id"
@@ -717,6 +747,7 @@ cmd_user() {
 user_ls() {
 	local json
 	json=$("$HEADSCALE_BIN" users list -o json) || die "failed to list users"
+	json=$(as_list "$json")
 	if ((JSON)); then
 		printf '%s\n' "$json"
 		return 0
@@ -735,7 +766,7 @@ user_ls() {
 }
 
 user_new() {
-	(($# >= 1)) || die "usage: hs user new <name>"
+	(($# == 1)) || die "usage: hs user new <name>"
 	if ((DRY_RUN)); then
 		print_dry_run users create "$1"
 		return 0
@@ -776,6 +807,9 @@ user_rm() {
 				printf '%s: cancelled\n' "$PROG"
 				return 0
 			}
+			# Same as nodes delete: headscale's own confirmation would prompt a
+			# second time, so it is skipped once hs has asked.
+			args+=(--force)
 		fi
 		"$HEADSCALE_BIN" "${args[@]}" >/dev/null
 		printf 'deleted user %s\n' "$t"
@@ -829,9 +863,9 @@ main() {
 	require_deps
 
 	case $cmd in
-		ls | list) cmd_ls "${1:-}" ;;
+		ls | list) cmd_ls "$@" ;;
 		node | nodes) cmd_node "$@" ;;
-		show | info) cmd_show "${1:-}" ;;
+		show | info) cmd_show "$@" ;;
 		rm | del | delete) cmd_rm "$@" ;;
 		rename | mv) cmd_rename "$@" ;;
 		tag | tags) cmd_tag "$@" ;;

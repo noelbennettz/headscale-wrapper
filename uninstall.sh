@@ -56,7 +56,7 @@ dest=${dest:-/usr/local/bin/hs}
 # The marker that identifies a file as ours, so we never delete a stranger.
 marker='name-based wrapper around the headscale'
 
-if [[ ! -e $dest ]]; then
+if [[ ! -e $dest && ! -L $dest ]]; then
 	printf 'uninstall: %s is not installed (nothing to do)\n' "$dest"
 	exit 0
 fi
@@ -68,7 +68,7 @@ if ! grep -qF -- "$marker" "$dest" 2>/dev/null; then
 	printf 'uninstall: deleting %s even though it does not look like hs (--force)\n' "$dest" >&2
 fi
 
-if [[ ${HS_SKIP_ROOT_CHECK:-0} != 1 && ! -w $dest ]]; then
+if [[ ${HS_SKIP_ROOT_CHECK:-0} != 1 && ! -L $dest && ! -w $dest ]]; then
 	die "$dest is not writable by $(id -un). Remove it with sudo, or delete the \
 file yourself if you own the directory"
 fi

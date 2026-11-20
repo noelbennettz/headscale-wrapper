@@ -543,6 +543,96 @@ check_status "help: works without deps" 0 $?
 check_contains "help: documents the node spelling" "hs node <verb>" "$out"
 check_contains "help: documents single-stack hosts" "IPv4-only and IPv6-only" "$out"
 
+# ---------------------------------------------------------------- empty server
+
+# headscale marshals an empty repeated field as `null`, not `[]`, so a fresh
+# server answers exactly that. Every read command and every name lookup has to
+# keep working instead of handing null to a jq program that iterates.
+empty=$tmp/empty
+mkdir -p "$empty"
+cat >"$empty/headscale" <<'EOF'
+#!/usr/bin/env bash
+case "$1 $2" in
+	"nodes list" | "preauthkeys list" | "users list") echo null ;;
+	*) echo "unexpected: $*" >&2; exit 1 ;;
+esac
+EOF
+chmod +x "$empty/headscale"
+empty_hs() { HS_HEADSCALE_BIN=$empty/headscale "$hs" "$@"; }
+
+out=$(empty_hs ls)
+check_status "empty server: ls exits 0" 0 $?
+check_contains "empty server: ls keeps the header" "NAME" "$out"
+check_not_contains "empty server: ls has no jq error" "jq:" "$out"
+
+out=$(empty_hs ls --json)
+check_json "empty server: ls --json stays an array" 'type == "array" and length == 0' "$out"
+
+out=$(empty_hs show laptop 2>&1)
+check_status "empty server: unknown node exits 1" 1 $?
+check_contains "empty server: unknown node message" "no such node: laptop" "$out"
+check_not_contains "empty server: unknown node has no jq error" "jq:" "$out"
+
+out=$(empty_hs route 2>&1)
+check_status "empty server: route exits 0" 0 $?
+check_contains "empty server: route keeps the header" "APPROVED" "$out"
+
+out=$(empty_hs key ls 2>&1)
+check_status "empty server: key ls exits 0" 0 $?
+check_contains "empty server: key ls keeps the header" "REUSABLE" "$out"
+
+out=$(empty_hs user ls 2>&1)
+check_status "empty server: user ls exits 0" 0 $?
+check_contains "empty server: user ls keeps the header" "DISPLAY" "$out"
+
+out=$(empty_hs key new -u alice 2>&1)
+check_status "empty server: key new without users exits 1" 1 $?
+check_contains "empty server: key new names the missing user" "no such user: alice" "$out"
+check_not_contains "empty server: no request with an empty user" "preauthkeys create" "$out"
+
+# ---------------------------------------------------------------- arguments
+
+# One confirmation is enough: hs asks, then tells headscale --force so it does
+# not ask again (and so a second "no" cannot be mistaken for a deletion).
+if command -v script >/dev/null 2>&1; then
+	reset_log
+	out=$(printf 'y\n' | script -qec "$hs rm phone" /dev/null 2>&1 | tr -d '\r')
+	prompts=$(grep -o '\[y/N\]' <<<"$out" | wc -l)
+	if [[ $prompts == 1 ]]; then
+		ok "rm: asks exactly once"
+	else
+		ng "rm: asks exactly once" "1 prompt" "$prompts answered prompts: $out"
+	fi
+	check_contains "rm: reports the deletion" "deleted phone (ID 2)" "$out"
+	check_calls "rm: headscale gets --force after the hs prompt" "nodes delete -i 2 --force"
+else
+	printf 'skip: rm prompt test needs script(1)\n'
+fi
+
+out=$("$hs" key rm 2>&1)
+check_status "key rm: missing ID is an error" 1 $?
+check_contains "key rm: usage names the verb" "usage: hs key rm <id...>" "$out"
+
+out=$("$hs" key expire 2>&1)
+check_status "key expire: missing ID is an error" 1 $?
+check_contains "key expire: usage names the verb" "usage: hs key expire <id...>" "$out"
+
+# A command that takes one node must not silently drop a second argument.
+out=$("$hs" ls alice extra 2>&1)
+check_status "ls: extra argument rejected" 1 $?
+check_contains "ls: extra argument usage" "usage: hs ls [user]" "$out"
+
+out=$("$hs" show laptop extra 2>&1)
+check_status "show: extra argument rejected" 1 $?
+
+out=$("$hs" rename laptop a b 2>&1)
+check_status "rename: extra argument rejected" 1 $?
+check_contains "rename: extra argument usage" "usage: hs rename <node> <new-name>" "$out"
+
+out=$("$hs" user new a b 2>&1)
+check_status "user new: extra argument rejected" 1 $?
+check_contains "user new: extra argument usage" "usage: hs user new <name>" "$out"
+
 # ---------------------------------------------------------------- install / uninstall
 
 bindir=$tmp/bin
@@ -580,6 +670,18 @@ fi
 out=$(HS_SKIP_ROOT_CHECK=1 "$here/../uninstall.sh" "$bindir/hs" 2>&1)
 check_status "uninstall: idempotent" 0 $?
 check_contains "uninstall: reports nothing to do" "not installed" "$out"
+
+# A dangling symlink is still something to remove, not "not installed".
+ln -s "$tmp/gone" "$tmp/dangling-hs"
+out=$(HS_SKIP_ROOT_CHECK=1 "$here/../uninstall.sh" "$tmp/dangling-hs" 2>&1)
+check_status "uninstall: dangling symlink needs --force" 1 $?
+out=$(HS_SKIP_ROOT_CHECK=1 "$here/../uninstall.sh" "$tmp/dangling-hs" --force 2>&1)
+check_status "uninstall: removes a dangling symlink with --force" 0 $?
+if [[ -L $tmp/dangling-hs ]]; then
+	ng "uninstall: dangling symlink is gone" "" "still present"
+else
+	ok "uninstall: dangling symlink is gone"
+fi
 
 # --prefix is the same knob for both scripts: PREFIX/bin/hs, created on install.
 prefix=$tmp/prefix
