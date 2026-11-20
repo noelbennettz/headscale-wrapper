@@ -578,6 +578,14 @@ It does not need a real headscale and does not touch anything:
 ./test/smoke.sh     # prints "N passed, 0 failed" and exits non-zero on a failure
 ```
 
+CI runs, on every pull request and on pushes to `main` plus a weekly schedule:
+`bash -n`, ShellCheck 0.10.0, `shfmt -d` (3.12.0), actionlint 1.7.7, the smoke
+suite, the documentation path check and the Docker integration test. ShellCheck,
+shfmt and actionlint are downloaded from their pinned releases and verified
+against a SHA-256, so a changed download fails the job instead of running.
+`./test/smoke.sh` and `./test/integration.sh` are the two commands worth running
+locally; `--help` on either shows the environment variables.
+
 `./test/docs-paths.sh` checks that every repository path the README and DOCS.md
 mention really exists (a path that was promised but never written is a test
 failure, not a broken link someone notices later).

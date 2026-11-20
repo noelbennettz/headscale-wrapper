@@ -15,7 +15,10 @@ cd -- "$here" || exit 1
 pass=0
 fail=0
 
-ok() { pass=$((pass + 1)); printf 'ok   %s\n' "$1"; }
+ok() {
+	pass=$((pass + 1))
+	printf 'ok   %s\n' "$1"
+}
 ng() {
 	fail=$((fail + 1))
 	printf 'FAIL %s\n' "$1"
@@ -38,8 +41,8 @@ for doc in "${docs[@]}"; do
 	# 1. Relative Markdown link targets: [text](path)
 	while read -r target; do
 		[[ -n $target ]] || continue
-		target=${target%%#*}   # drop the anchor
-		target=${target%%\?*}  # drop a query string
+		target=${target%%#*}  # drop the anchor
+		target=${target%%\?*} # drop a query string
 		[[ -n $target ]] || continue
 		checked=$((checked + 1))
 		if [[ -e $target ]]; then

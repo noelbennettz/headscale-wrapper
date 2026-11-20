@@ -33,7 +33,10 @@ work=$(mktemp -d)
 pass=0
 fail=0
 
-ok() { pass=$((pass + 1)); printf 'ok   %s\n' "$1"; }
+ok() {
+	pass=$((pass + 1))
+	printf 'ok   %s\n' "$1"
+}
 ng() {
 	fail=$((fail + 1))
 	printf 'FAIL %s\n' "$1"
@@ -125,9 +128,15 @@ log:
 EOF
 
 docker image inspect "$HEADSCALE_IMAGE" >/dev/null 2>&1 || docker pull "$HEADSCALE_IMAGE" >/dev/null ||
-	{ printf 'integration: cannot obtain %s\n' "$HEADSCALE_IMAGE" >&2; exit 1; }
+	{
+		printf 'integration: cannot obtain %s\n' "$HEADSCALE_IMAGE" >&2
+		exit 1
+	}
 binary=$(docker image inspect "$HEADSCALE_IMAGE" --format '{{index .Config.Entrypoint 0}}')
-[[ -n $binary ]] || { printf 'integration: %s has no entrypoint\n' "$HEADSCALE_IMAGE" >&2; exit 1; }
+[[ -n $binary ]] || {
+	printf 'integration: %s has no entrypoint\n' "$HEADSCALE_IMAGE" >&2
+	exit 1
+}
 
 # hs runs on the host; this wrapper is its "headscale binary". It is what makes
 # the whole thing a real test: hs builds the argv, real headscale answers.
