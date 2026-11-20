@@ -4,9 +4,10 @@
 > documentation in the `README.md` and `DOCS.md` of that release's tag on
 > GitHub; this tree only documents the current one.
 
-Everything that is not part of the skeleton in [README.md](README.md): the full
-command reference, output, exit codes, environment variables, FAQ, tests, the
-mapping to the native `headscale` CLI and the parsing assumptions.
+This is the reference for everything the [README.md](README.md) leaves out: the
+full command reference, output, exit codes, environment variables, the FAQ, the
+tests, how each command maps to the native `headscale` CLI, and the parsing
+assumptions.
 
 ## Contents
 
@@ -33,8 +34,8 @@ mapping to the native `headscale` CLI and the parsing assumptions.
   `hs rename`, `hs tag`, `hs expire` — a node is found by `given_name`, then
   `hostname`, then a unique prefix
 - **`hs node <verb> ...`** — the headscale-style two-word spelling (`hs node rm
-  gw-fmt-1` = `hs rm gw-fmt-1`), so muscle memory from the native CLI works and
-  an unknown verb is an error rather than a user filter
+  gw-fmt-1` = `hs rm gw-fmt-1`), so the native spelling works too and an unknown
+  verb is reported as such instead of being read as a user name
 - **Ambiguity is an error, never a guess**: `hs show lap` lists the candidates
   and asks for the ID instead of picking one
 - **Subnet routes that keep the approved list**: `hs route add` reads the
@@ -61,7 +62,7 @@ mapping to the native `headscale` CLI and the parsing assumptions.
   table, unchanged, so scripts can use the same name resolution and get the raw
   fields
 - **No state of its own**: reads and writes both go through the same `headscale`
-  binary; two runtime environment variables, no daemon and no config file
+  binary; no daemon, no config file, and only two environment variables
 
 ## Install, update, uninstall
 
@@ -97,21 +98,22 @@ directory (`PREFIX/bin`):
 export PATH="$HOME/.local/bin:$PATH"      # if it is not in PATH already
 ```
 
-Check the install: `command -v hs` prints the path it went to, `hs help` prints
-the command list without touching `headscale`, and `hs ls` prints the node table
-(the header with no rows on a fresh server). A `command not found` after
+Check the install: `command -v hs` prints where it was installed, `hs help`
+prints the command list without touching `headscale`, and `hs ls` prints the
+node table (just the header on a fresh server). A `command not found` after
 installing to a custom path means that directory is not in `PATH`; the installer
-says so (`note: <dir> is not in PATH`) and warns when a different `hs` would win.
+says so (`note: <dir> is not in PATH`) and warns when another `hs` would be
+found first.
 
 The installer checks that the destination directory exists and is writable by
 you before touching anything, and its failure messages say which of the three
 ways out applies: run it with `sudo`, create the missing directory, or use
 `--prefix`. It warns when `jq` or `headscale` is missing but does not fail on
-it. Apart from `--prefix` creating `PREFIX/bin`, it creates no directory,
-inspects nothing that is already there and replaces the one destination file.
-To update, pull and install again with the same arguments — `install.sh`
-overwrites the script in place, so there is no state to migrate and nothing else
-on the machine changes:
+it. Apart from creating `PREFIX/bin` for `--prefix`, it creates no directories,
+does not look at what is already at the destination, and replaces that one file.
+To update, pull and run the installer again with the same arguments —
+`install.sh` overwrites the script in place, so there is no state to migrate and
+nothing else on the machine changes:
 
 ```sh
 git pull
@@ -448,11 +450,11 @@ table would.
 
 ## Dry runs
 
-`--dry-run` on a write command does everything except the write: it resolves the
-node or user the same way, then prints the `headscale` command it would have run,
-prefixed `dry-run: `, instead of running it. Nothing changes and no confirmation
-prompt appears, so a destructive command can be inspected from a pipe, a cron
-job or a review script without `--force`:
+`--dry-run` on a write command goes through the same name resolution as the real
+run, then prints the `headscale` command it would execute, prefixed with
+`dry-run: `, and stops there. Nothing changes and no confirmation prompt appears,
+so a destructive command can be inspected from a pipe, a cron job or a review
+script without `--force`:
 
 ```console
 $ hs rm phone --dry-run
@@ -467,10 +469,10 @@ dry-run: headscale preauthkeys create -u 1 -e 24h --reusable
 
 It covers `hs rm`, `hs rename`, `hs tag`, `hs expire` (both forms), `hs route
 add`, `hs route rm`, `hs key new`, `hs key rm`, `hs key expire`, `hs user new`
-and `hs user rm`, including the two-word `hs node <verb>` spelling. Some of
-those commands are computed rather than copied — `hs route add` prints the
-**merged** route list and `hs route rm` the remaining one — so the line shows
-what would actually be sent, not what you typed.
+and `hs user rm`, including the two-word `hs node <verb>` spelling. Some
+commands do more than echo your arguments — `hs route add` prints the **merged**
+route list and `hs route rm` the remaining one — so the line shows what would
+actually be sent, not what you typed.
 
 Name resolution still reads: the ID in the printed line comes from a real
 `nodes list` / `users list` call. A name that does not resolve, or one that is
@@ -507,10 +509,10 @@ installer and uninstaller.
 ### How is this different from a headscale web UI?
 
 `headscale-ui` and `headplane` are web front ends for headscale: TLS, an auth
-layer, a session, and a UI that tracks headscale's API. `hs` is the other side of
-that trade-off: one bash script on the server, usually run as root over SSH, with
-the same name-based commands and no credentials of its own. A web UI serves
-several operators; `hs` covers the single operator working in a terminal.
+layer, a session, and a UI that tracks headscale's API. `hs` takes the opposite
+approach: one bash script on the server, usually run as root over SSH, with the
+same name-based commands and no credentials of its own. A web UI serves several
+operators; `hs` covers the single operator working in a terminal.
 
 ### Why not just use the headscale CLI directly?
 
@@ -534,7 +536,7 @@ prefix — a name that merely *contains* the query never matches.
 
 ### Can I use it from a script or cron?
 
-Yes for reads and for `--force` writes. Destructive commands (`hs rm`,
+Yes, for reads and for writes with `--force`. Destructive commands (`hs rm`,
 `hs user rm`) refuse to run when stdin is not a terminal, so a pipeline or a
 cron job cannot delete a node by accident; pass `--force` when that is exactly
 what you mean: `--force` is forwarded to headscale as well, where it is a root
@@ -589,7 +591,7 @@ It does not need a real headscale and does not touch anything:
 ./test/smoke.sh     # prints "N passed, 0 failed" and exits non-zero on a failure
 ```
 
-CI runs, on every pull request and on pushes to `main` plus a weekly schedule:
+CI runs on every pull request, on every push to `main` and once a week:
 `bash -n`, ShellCheck 0.10.0, `shfmt -d` (3.12.0), actionlint 1.7.7, the smoke
 suite, the documentation path check and the Docker integration test. ShellCheck,
 shfmt and actionlint are downloaded from their pinned releases and verified
@@ -675,7 +677,7 @@ server version.
 - Destructive commands refuse to run in a non-interactive shell (pipe, cron)
   unless `--force` is given. Once `hs` has asked, headscale's own confirmation
   (`nodes delete` and `users destroy` have one) is skipped with `--force`, so the
-  question is asked once and "yes" is never overwritten by a second prompt.
+  question is asked once and a second prompt cannot turn a yes into a no.
 - headscale marshals an empty repeated field as `null`; `hs` normalises that to
   `[]` once, after every `-o json` read, so filters and name lookups keep working
   on a fresh server.

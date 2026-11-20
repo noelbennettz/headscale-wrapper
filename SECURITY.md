@@ -24,8 +24,8 @@ so `hs` is meant to be run as root on the headscale server. Consequences:
   wrapper, no "read-only" mode. `hs ls --json` is safe to look at, but the same
   binary running as root also accepts `hs rm`. The confirmation prompt and the
   refusal to prompt in a non-interactive shell are guard rails against
-  accidents, not an access-control boundary; `--force` and `--dry-run` exist
-  precisely to skip the prompt.
+  accidents, not an access-control boundary: `--force` is for when you mean it,
+  and `--dry-run` prints the command instead of asking.
 - **Environment variables are input.** `HS_HEADSCALE_BIN` decides which binary
   gets executed. If `hs` runs as root from `sudo`, a script or a CI job, do not
   pass that variable through from an untrusted source (`env_keep`, a
